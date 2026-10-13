@@ -48,6 +48,8 @@ pub struct MeasureView {
     pub error: Option<String>,
     pub snaps: measure::snap::SnapOptions,
     pub snap_enabled: bool,
+    /// Lock new vertices to horizontal/vertical from the last one (F8), like AutoCAD ortho.
+    pub ortho: bool,
     pub sensitivity: f64,
     pub drawing_points: f64,
     pub real_distance: f64,
@@ -75,6 +77,7 @@ impl Default for MeasureView {
             error: None,
             snaps: Default::default(),
             snap_enabled: true,
+            ortho: false,
             sensitivity: 6.0,
             drawing_points: 72.0,
             real_distance: 1.0,
@@ -124,6 +127,14 @@ pub(crate) fn page_input(
     if !typing && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
         state.cancel();
     }
+    if !typing {
+        if ui.input(|i| i.key_pressed(egui::Key::F3)) {
+            state.snap_enabled = !state.snap_enabled;
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::F8)) {
+            state.ortho = !state.ortho;
+        }
+    }
     let screen = |p: Point| {
         let v = info.user_to_view(p[0] as f32, p[1] as f32);
         xf.norm_to_screen(v[0] / xf.pw, v[1] / xf.ph)
@@ -131,6 +142,7 @@ pub(crate) fn page_input(
     let pos = ui.input(|i| i.pointer.hover_pos()).filter(|p| xf.rect.contains(*p));
     let mut hover = None;
     let mut snap = None;
+    let mut constrained = false;
     if let Some(pos) = pos {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         let (vx, vy) = xf.screen_to_view(pos);
@@ -163,10 +175,12 @@ pub(crate) fn page_input(
                 }
             }
         }
-        if ui.input(|i| i.modifiers.shift)
+        let shift = ui.input(|i| i.modifiers.shift);
+        if (shift || state.ortho)
             && let Some(last) = state.points.last()
         {
-            point = measure::snap::constrain(*last, point);
+            point = if shift { measure::snap::constrain(*last, point) } else { measure::snap::constrain_ortho(*last, point) };
+            constrained = true;
         }
         hover = Some(point);
         if resp.clicked() {
@@ -198,59 +212,155 @@ pub(crate) fn page_input(
             }
         }
     }
-    if state.page == Some(page) && !state.points.is_empty() {
+    let accent = Color32::from_rgb(0, 120, 214);
+    let tokens = Tokens::get(ui.ctx());
+    let mut drawing = state.page == Some(page) && !state.points.is_empty();
+    if drawing {
         if (resp.double_clicked() || !typing && ui.input(|i| i.key_pressed(egui::Key::Enter))) && matches!(tool, Tool::Perimeter | Tool::Area) {
             finish(state, &mut view.pending_edit, doc, page, tool, author);
         }
         if !typing && ui.input(|i| i.key_pressed(egui::Key::Backspace)) {
             state.points.pop();
         }
-        let mut points = state.points.clone();
-        if let Some(p) = hover
-            && points.last().is_none_or(|last| measure::distance(*last, p) > 1e-6)
-        {
-            points.push(p);
-        }
-        if let Some(scale) = &state.scale {
-            match measure::reading(tool.kind(), &points, scale) {
-                Ok(reading) => state.reading = Some(reading),
-                Err(e) => state.error = Some(e.to_string()),
-            }
-        }
-        let positions: Vec<Pos2> = points.iter().map(|&p| screen(p)).collect();
-        let stroke = Stroke::new(1.5, Color32::from_rgb(0, 120, 214));
-        for pair in positions.windows(2) {
-            if let [a, b] = pair {
-                ui.painter().line_segment([*a, *b], stroke);
-            }
-        }
-        if tool == Tool::Area
-            && let (Some(a), Some(b)) = (positions.first(), positions.last())
-        {
-            ui.painter().line_segment([*a, *b], stroke);
-        }
-        for &p in &positions {
-            ui.painter().circle_filled(p, 3.0, stroke.color);
-        }
-        if let (Some(p), Some(kind)) = (hover, snap) {
-            ui.painter().circle_stroke(screen(p), 6.0, Stroke::new(1.0, Color32::from_rgb(46, 158, 92)));
-            ui.painter().text(
-                screen(p) + egui::vec2(10.0, -10.0),
-                egui::Align2::LEFT_BOTTOM,
-                tl!(match kind {
-                    measure::snap::SnapKind::Endpoint => "Endpoint",
-                    measure::snap::SnapKind::Midpoint => "Midpoint",
-                    measure::snap::SnapKind::Intersection => "Intersection",
-                    measure::snap::SnapKind::Path => "Path",
-                }),
-                crate::theme::regular(11.0),
-                stroke.color,
-            );
-        }
-        if let (Some(p), Some(reading)) = (hover, &state.reading) {
-            ui.painter().text(screen(p) + egui::vec2(12.0, 12.0), egui::Align2::LEFT_TOP, &reading.label, crate::theme::semibold(12.0), stroke.color);
+        drawing = state.page == Some(page) && !state.points.is_empty();
+    }
+    let mut points = if drawing { state.points.clone() } else { Vec::new() };
+    if drawing
+        && let Some(p) = hover
+        && points.last().is_none_or(|last| measure::distance(*last, p) > 1e-6)
+    {
+        points.push(p);
+    }
+    if drawing && let Some(scale) = &state.scale {
+        match measure::reading(tool.kind(), &points, scale) {
+            Ok(reading) => state.reading = Some(reading),
+            Err(e) => state.error = Some(e.to_string()),
         }
     }
+    let positions: Vec<Pos2> = points.iter().map(|&p| screen(p)).collect();
+    if drawing {
+        // Ortho/shift guide: a dashed tracking line through the last vertex and the cursor.
+        if constrained && let (Some(last), Some(p)) = (state.points.last(), hover) {
+            let (a, b) = (screen(*last), screen(p));
+            let d = b - a;
+            if d.length() > 1.0 {
+                let d = d.normalized() * 4000.0;
+                ui.painter().extend(egui::Shape::dashed_line(&[a - d, a + d], Stroke::new(1.0, accent.gamma_multiply(0.8)), 6.0, 4.0));
+            }
+        }
+        let mut lines: Vec<(Vec<Pos2>, bool)> = positions.windows(2).map(|w| (w.to_vec(), false)).collect();
+        if tool == Tool::Area
+            && positions.len() >= 3
+            && let (Some(a), Some(b)) = (positions.first(), positions.last())
+        {
+            lines.push((vec![*b, *a], false));
+        }
+        halo_lines(ui, &lines, accent, 2.0);
+        // Committed vertices are squares so they read as handles, not as part of the drawing.
+        for &p in positions.iter().take(state.points.len()) {
+            let r = egui::Rect::from_center_size(p, egui::vec2(7.0, 7.0));
+            ui.painter().rect_filled(r, 0.0, accent);
+            ui.painter().rect_stroke(r, 0.0, Stroke::new(1.5, Color32::WHITE), egui::StrokeKind::Outside);
+        }
+        // Per-segment lengths, centred on each segment.
+        if let Some(scale) = &state.scale {
+            let skip = points.len().saturating_sub(65);
+            for (i, w) in points.windows(2).enumerate().skip(skip) {
+                let (Some(a), Some(b)) = (w.first(), w.get(1)) else { continue };
+                let Ok(r) = measure::reading(Kind::Distance, &[*a, *b], scale) else { continue };
+                let (sa, sb) = (screen(*a), screen(*b));
+                let d = sb - sa;
+                if d.length() < 24.0 && i + 2 != points.len() {
+                    continue;
+                }
+                let mut n = if d.length() > 1e-3 { egui::vec2(-d.y, d.x).normalized() } else { egui::vec2(0.0, -1.0) };
+                if n.y > 0.0 {
+                    n = -n;
+                }
+                chip(ui, sa + d * 0.5 + n * 14.0, egui::Align2::CENTER_CENTER, &r.label, false, tokens.text, tokens.card);
+            }
+        }
+        // Closing hint: the first vertex lights up when a click would close the area.
+        if tool == Tool::Area
+            && state.points.len() >= 3
+            && let (Some(first), Some(pos)) = (positions.first(), pos)
+            && first.distance(pos) <= 6.0
+        {
+            ui.painter().circle_stroke(*first, 10.0, Stroke::new(3.5, Color32::from_black_alpha(190)));
+            ui.painter().circle_stroke(*first, 10.0, Stroke::new(1.5, Color32::from_rgb(46, 158, 92)));
+            chip(ui, *first + egui::vec2(14.0, -14.0), egui::Align2::LEFT_BOTTOM, tl!("Close"), false, tokens.text, tokens.card);
+        }
+        // Live total, angle and deltas next to the cursor.
+        if let (Some(p), Some(reading), Some(scale)) = (hover, &state.reading, &state.scale) {
+            let c = screen(p);
+            let precision = usize::from(scale.precision);
+            let total = matches!(tool, Tool::Perimeter | Tool::Area);
+            if total {
+                chip(ui, c + egui::vec2(16.0, 16.0), egui::Align2::LEFT_TOP, &reading.label, true, tokens.accent_text, tokens.accent);
+            }
+            if let Some(last) = state.points.last() {
+                let d = measure::reading(Kind::Distance, &[*last, p], scale).map(|r| (r.angle, r.delta_x, r.delta_y)).unwrap_or_default();
+                let text = format!("{:.1}°   Δx {:.precision$}   Δy {:.precision$}", d.0, d.1.abs(), d.2.abs());
+                let y = if total { 42.0 } else { 16.0 };
+                chip(ui, c + egui::vec2(16.0, y), egui::Align2::LEFT_TOP, &text, false, tokens.text_muted, tokens.card);
+            }
+        }
+    }
+    if let Some(pos) = pos {
+        if let (Some(p), Some(kind)) = (hover, snap) {
+            snap_glyph(ui, screen(p), kind);
+            chip(ui, screen(p) + egui::vec2(12.0, -12.0), egui::Align2::LEFT_BOTTOM, snap_name(kind), false, tokens.text, tokens.card);
+        } else if state.snap_enabled {
+            // Pick box where a snap would be looked for.
+            let half = state.sensitivity as f32;
+            let r = egui::Rect::from_center_size(pos, egui::vec2(half * 2.0, half * 2.0));
+            ui.painter().rect_stroke(r, 0.0, Stroke::new(3.0, Color32::from_black_alpha(120)), egui::StrokeKind::Middle);
+            ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, Color32::from_rgb(255, 212, 0)), egui::StrokeKind::Middle);
+        }
+        // Mode strip, like the AutoCAD status bar.
+        let clip = ui.clip_rect();
+        let on = |b: bool| if b { tl!("on") } else { tl!("off") };
+        let status = format!("{} F3 {}   {} F8 {}   Shift 45°", tl!("Snap"), on(state.snap_enabled), tl!("Ortho"), on(state.ortho));
+        chip(ui, egui::pos2(clip.left() + 8.0, clip.bottom() - 8.0), egui::Align2::LEFT_BOTTOM, &status, false, tokens.text_muted, tokens.card);
+    }
+}
+fn snap_name(kind: measure::snap::SnapKind) -> &'static str {
+    tl!(match kind {
+        measure::snap::SnapKind::Endpoint => "Endpoint",
+        measure::snap::SnapKind::Midpoint => "Midpoint",
+        measure::snap::SnapKind::Intersection => "Intersection",
+        measure::snap::SnapKind::Path => "Path",
+    })
+}
+/// Polylines with a dark halo underneath, legible on light, dark and busy drawings alike.
+fn halo_lines(ui: &egui::Ui, lines: &[(Vec<Pos2>, bool)], color: Color32, width: f32) {
+    for stroke in [Stroke::new(width + 2.5, Color32::from_black_alpha(190)), Stroke::new(width, color)] {
+        for (pts, closed) in lines {
+            ui.painter().add(if *closed { egui::Shape::closed_line(pts.clone(), stroke) } else { egui::Shape::line(pts.clone(), stroke) });
+        }
+    }
+}
+/// AutoSnap marker: square = endpoint, triangle = midpoint, X = intersection, hourglass = nearest.
+fn snap_glyph(ui: &egui::Ui, c: Pos2, kind: measure::snap::SnapKind) {
+    use measure::snap::SnapKind;
+    let h = 6.0;
+    let p = |dx: f32, dy: f32| c + egui::vec2(dx * h, dy * h);
+    let lines: Vec<(Vec<Pos2>, bool)> = match kind {
+        SnapKind::Endpoint => vec![(vec![p(-1.0, -1.0), p(1.0, -1.0), p(1.0, 1.0), p(-1.0, 1.0)], true)],
+        SnapKind::Midpoint => vec![(vec![p(0.0, -1.1), p(1.1, 0.9), p(-1.1, 0.9)], true)],
+        SnapKind::Intersection => vec![(vec![p(-1.0, -1.0), p(1.0, 1.0)], false), (vec![p(1.0, -1.0), p(-1.0, 1.0)], false)],
+        SnapKind::Path => vec![(vec![p(-1.0, -1.0), p(1.0, -1.0), p(-1.0, 1.0), p(1.0, 1.0)], true)],
+    };
+    halo_lines(ui, &lines, Color32::from_rgb(255, 212, 0), 2.0);
+}
+fn chip(ui: &egui::Ui, anchor: Pos2, align: egui::Align2, text: &str, bold: bool, fg: Color32, bg: Color32) {
+    let font = if bold { crate::theme::semibold(12.0) } else { crate::theme::regular(11.5) };
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), font, fg);
+    let pad = egui::vec2(6.0, 3.0);
+    let rect = align.anchor_size(anchor, galley.size() + pad * 2.0);
+    ui.painter().rect_filled(rect, 3.0, bg);
+    ui.painter().rect_stroke(rect, 3.0, Stroke::new(1.0, fg.gamma_multiply(0.45)), egui::StrokeKind::Inside);
+    ui.painter().galley(rect.min + pad, galley, fg);
 }
 fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, page: usize, tool: Tool, author: &str) {
     if tool == Tool::Calibrate {

@@ -1576,3 +1576,38 @@ fn click_and_drag_refuse_coordinates_that_overflow_like_move() {
     assert_eq!(ok(&mut h, &c, "ui.click", json!({ "x": x, "y": y }))["clicked"], json!([x, y]));
     ok(&mut h, &c, "ui.drag", json!({ "from": [x, y], "to": [x + 10.0, y], "steps": 2 }));
 }
+
+#[test]
+fn opening_measure_selects_distance_and_keeps_a_tool_already_chosen() {
+    let (mut h, c) = harness_pages(1);
+    let tool = |h: &Harness<'static, PdfCraftApp>| format!("{:?}", h.state().quick_tool);
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.scale"}));
+    assert!(tool(&h).contains("Distance"), "{}", tool(&h));
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.area"}));
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.info"}));
+    assert!(tool(&h).contains("Area"), "{}", tool(&h));
+}
+
+#[test]
+fn a_scale_field_is_stored_in_the_page_when_released_without_pressing_apply() {
+    let (mut h, c) = harness_pages(1);
+    let doc = h.state().views[0].id;
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.scale"}));
+    h.run_steps(3);
+    let unit = h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap().unit;
+    assert_ne!(unit, "ft");
+    // The panel's Unit box is the one text input holding the unit; other widgets may show it too.
+    let field = h.get_all_by_value(unit.as_str()).find(|n| format!("{:?}", n.accesskit_node().role()).contains("TextInput")).expect("unit field");
+    field.focus();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    field.type_text("ft");
+    h.run_steps(2);
+    // Still being edited: nothing is stored yet.
+    let stored = h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap().unit;
+    assert_eq!(stored, unit);
+    // Releasing the field (clicking elsewhere) stores the scale.
+    h.get_by_label("Drawing scale").click();
+    h.run_steps(4);
+    let stored = h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap().unit;
+    assert_eq!(stored, "ft");
+}

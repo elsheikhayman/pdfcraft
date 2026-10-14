@@ -162,6 +162,10 @@ impl Scale {
     /// Single-unit decimal scales are editable. Compound/fractional and non-rectilinear
     /// imports are refused explicitly; their dictionaries and appearance remain untouched.
     pub fn read(doc: &Document, object: &Object) -> Result<Self> {
+        Self::read_or(doc, object, "units")
+    }
+    /// [`Scale::read`], naming a blank unit label (common in CAD exports) `blank_unit`.
+    pub fn read_or(doc: &Document, object: &Object, blank_unit: &str) -> Result<Self> {
         let o = doc.resolve(object);
         let d = o.as_dict().ok_or_else(|| invalid("invalid measure dictionary"))?;
         if d.name(b"Subtype").is_some_and(|n| n != b"RL") {
@@ -183,7 +187,10 @@ impl Scale {
                 }
                 _ => return Err(invalid("fractional measurement formats are not supported yet")),
             };
-            Ok((text(f, b"U"), f.get(b"C").and_then(Object::as_f64).ok_or_else(|| invalid("missing conversion factor"))?, precision as u8))
+            // CAD exports often write a blank unit label; keep the factor and name the unit generically.
+            let unit = text(f, b"U");
+            let unit = if unit.trim().is_empty() { blank_unit.to_owned() } else { unit };
+            Ok((unit, f.get(b"C").and_then(Object::as_f64).ok_or_else(|| invalid("missing conversion factor"))?, precision as u8))
         };
         let (unit, x, _) = format(b"X")?;
         let y = if d.contains(b"Y") {
@@ -471,7 +478,7 @@ pub fn scale_at_or(doc: &Document, page_index: usize, at: Point, per_point: f64,
                     && at[1] >= b[1].min(b[3])
                     && at[1] <= b[1].max(b[3])
                 {
-                    return Scale::read(doc, d.get(b"Measure").ok_or_else(|| invalid("viewport has no measurement scale"))?);
+                    return Scale::read_or(doc, d.get(b"Measure").ok_or_else(|| invalid("viewport has no measurement scale"))?, unit);
                 }
             }
         }

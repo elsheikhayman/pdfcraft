@@ -2030,6 +2030,9 @@ impl PdfCraftApp {
         if let Some(view) = self.active.and_then(|i| self.views.get_mut(i)) {
             view.organize = id == "organize";
         }
+        if id == "measure" {
+            measure_ui::default_tool(self);
+        }
     }
 
     /// Select the workspace and its matching tool panel, just like the mode bar.

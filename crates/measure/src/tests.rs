@@ -461,3 +461,16 @@ fn a_stream_over_the_byte_budget_uses_it_up_once() {
     assert!(g.truncated);
     assert_eq!(g.segments.len(), 1, "the parts before it still snap");
 }
+
+#[test]
+fn blank_unit_labels_from_cad_exports_are_readable() {
+    let measure = "<< /Type /Measure /Subtype /RL /R ( ) /X [<< /C 0.5 /U ( ) >>] /D [<< /C 1 /U ( ) >>] /A [<< /C 1 /U ( ) >>] >>";
+    let viewport = format!("<< /Type /Viewport /BBox [0 0 100 100] /Measure {measure} >>");
+    let d = fixture("", "/VP [6 0 R]", &["[]", &viewport]);
+    let scale = scale_at(&d, 0, [50.0, 50.0]).expect("a blank unit label must not make the scale unreadable");
+    close(scale.x, 0.5);
+    assert_eq!(scale.unit, "in");
+    let scale = scale_at_or(&d, 0, [50.0, 50.0], 25.4 / 72.0, "mm").unwrap();
+    assert_eq!((scale.unit.as_str(), scale.area_unit.as_str()), ("mm", "mm"));
+    close(scale.x, 0.5);
+}

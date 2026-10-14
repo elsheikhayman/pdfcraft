@@ -2985,6 +2985,8 @@ fn measurement_edits_are_transactional_and_honour_annotation_permissions() {
         label: "Wall".into(),
         author: "Tester".into(),
         offset: 0.0,
+        text_size: measure::DEFAULT_TEXT_SIZE,
+        arrow_size: measure::DEFAULT_ARROW_SIZE,
     };
     session.apply(id, Edit::AddMeasurement(m.clone())).unwrap();
     let before = session.get(id).unwrap().bytes.clone();

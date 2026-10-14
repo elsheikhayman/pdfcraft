@@ -39,6 +39,8 @@ impl Automation {
             label: a.opt_str("label")?.unwrap_or("").into(),
             author: a.opt_str("author")?.unwrap_or(super::comments::DEFAULT_AUTHOR).into(),
             offset,
+            text_size: a.opt_num("text_size")?.unwrap_or(measure::DEFAULT_TEXT_SIZE),
+            arrow_size: a.opt_num("arrow_size")?.unwrap_or(measure::DEFAULT_ARROW_SIZE),
         });
         self.apply(a, edit)
     }

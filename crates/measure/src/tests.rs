@@ -27,6 +27,8 @@ fn new(kind: Kind, points: Vec<Point>) -> NewMeasurement {
         label: "Room 1".into(),
         author: "A".into(),
         offset: 0.0,
+        text_size: DEFAULT_TEXT_SIZE,
+        arrow_size: DEFAULT_ARROW_SIZE,
     }
 }
 #[test]
@@ -429,4 +431,32 @@ fn offsets_are_refused_when_not_finite_huge_or_not_on_a_distance() {
     m.offset = 5.0;
     assert!(add(&mut doc, &m, &Meta::default()).is_err());
     assert!(dimension_line([1.0, 1.0], [1.0, 1.0], 5.0).is_none());
+}
+#[test]
+fn text_and_arrow_sizes_are_stored_drawn_and_range_checked() {
+    let mut doc = fixture("", "", &[]);
+    let mut m = new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]);
+    m.text_size = 20.0;
+    m.arrow_size = 30.0;
+    let index = add(&mut doc, &m, &Meta::default()).unwrap();
+    let (_, dict) = annot(&doc, 0, index).unwrap();
+    close(dict.get(b"PCMeasureTextSize").and_then(Object::as_f64).unwrap(), 20.0);
+    close(dict.get(b"PCArrowSize").and_then(Object::as_f64).unwrap(), 30.0);
+    let content = |d: &Dict| String::from_utf8_lossy(&pdfcraft_annot::appearance::build(d).unwrap().decoded().unwrap()).into_owned();
+    assert!(content(&dict).contains(" 20 Tf "), "{}", content(&dict));
+    let plain = add(&mut doc, &new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]), &Meta::default()).unwrap();
+    let (_, default) = annot(&doc, 0, plain).unwrap();
+    assert!(content(&default).contains(" 10 Tf "));
+    assert_ne!(content(&default), content(&dict));
+    // The text box grows with the text so the value is never clipped.
+    let height = |d: &Dict| {
+        let r: Vec<f64> = d.get(b"Rect").and_then(Object::as_array).unwrap().iter().filter_map(Object::as_f64).collect();
+        r[3] - r[1]
+    };
+    assert!(height(&dict) > height(&default));
+    for (text, arrow) in [(3.0, 9.0), (73.0, 9.0), (10.0, 0.5), (10.0, 101.0), (f64::NAN, 9.0), (10.0, f64::INFINITY)] {
+        let mut bad = new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]);
+        (bad.text_size, bad.arrow_size) = (text, arrow);
+        assert!(add(&mut doc, &bad, &Meta::default()).is_err(), "{text} {arrow}");
+    }
 }

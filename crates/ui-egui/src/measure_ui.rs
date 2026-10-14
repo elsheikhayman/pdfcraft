@@ -60,6 +60,9 @@ pub struct MeasureView {
     /// Lock new vertices to horizontal/vertical from the last one (F8), like AutoCAD ortho.
     pub ortho: bool,
     pub sensitivity: f64,
+    /// Height of the value text and size of the arrowheads of new measurements, in points.
+    pub text_size: f64,
+    pub arrow_size: f64,
     pub drawing_points: f64,
     /// The unit the drawing side of the scale is shown in ("1 mm = 100 cm").
     pub paper_unit: Unit,
@@ -93,6 +96,8 @@ impl Default for MeasureView {
             snap_enabled: true,
             ortho: false,
             sensitivity: 6.0,
+            text_size: measure::DEFAULT_TEXT_SIZE,
+            arrow_size: measure::DEFAULT_ARROW_SIZE,
             drawing_points: 72.0,
             paper_unit: Unit::Millimetres,
             real_distance: 1.0,
@@ -290,7 +295,8 @@ pub(crate) fn page_input(
             ui.painter().rect_stroke(r, 0.0, Stroke::new(1.5, Color32::WHITE), egui::StrokeKind::Outside);
         }
         if placing && let (Some(off), Some(reading), [a, b]) = (offset, &state.reading, state.points.as_slice()) {
-            dimension_preview(ui, *a, *b, off, &screen, &reading.label, accent);
+            let zoom = xf.rect.width() / xf.pw;
+            dimension_preview(ui, [*a, *b], off, &screen, &reading.label, accent, [state.text_size as f32 * zoom, state.arrow_size as f32 * zoom]);
         }
         // Per-segment lengths, centred on each segment.
         if let Some(scale) = state.scale.as_ref().filter(|_| !placing) {
@@ -369,7 +375,15 @@ fn placement_offset(a: Point, b: Point, p: Point) -> f64 {
 }
 /// The dimension as it will be saved: extension lines, the dimension line with filled arrows at
 /// both ends, and the value above it, turned to follow the line and kept upright.
-fn dimension_preview(ui: &egui::Ui, a: Point, b: Point, offset: f64, screen: &dyn Fn(Point) -> Pos2, label: &str, accent: Color32) {
+fn dimension_preview(
+    ui: &egui::Ui,
+    [a, b]: [Point; 2],
+    offset: f64,
+    screen: &dyn Fn(Point) -> Pos2,
+    label: &str,
+    accent: Color32,
+    [text, arrow]: [f32; 2],
+) {
     let Some((da, db)) = measure::dimension_line(a, b, offset) else { return };
     let (sa, sb, sda, sdb) = (screen(a), screen(b), screen(da), screen(db));
     let axis = sdb - sda;
@@ -385,15 +399,16 @@ fn dimension_preview(ui: &egui::Ui, a: Point, b: Point, offset: f64, screen: &dy
     }
     halo_lines(ui, &[(vec![sda, sdb], false)], accent, 1.5);
     // Filled arrows, tip on each extension line, pointing outwards along the dimension line.
-    let arrow = (axis.length() * 0.3).min(12.0);
-    let side = egui::vec2(-dir.y, dir.x) * (arrow * 0.18);
+    // The same head the saved annotation draws: wings `arrow` long, 30 degrees off the line.
+    let (along, across) = (arrow * 0.866, arrow * 0.5);
+    let side = egui::vec2(-dir.y, dir.x) * across;
     for (tip, inward) in [(sda, dir), (sdb, -dir)] {
-        let base = tip + inward * arrow;
+        let base = tip + inward * along;
         ui.painter().add(egui::Shape::convex_polygon(vec![tip, base + side, base - side], accent, Stroke::new(1.0, Color32::from_black_alpha(190))));
     }
     let up_dir = if dir.x < 0.0 || (dir.x == 0.0 && dir.y > 0.0) { -dir } else { dir };
     let up = egui::vec2(up_dir.y, -up_dir.x);
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), crate::theme::semibold(12.5), Color32::WHITE);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), crate::theme::semibold(text.clamp(3.0, 200.0)), Color32::WHITE);
     let size = galley.size();
     let mid = sda + axis * 0.5;
     let origin = mid - up_dir * (size.x * 0.5) + up * (size.y + 4.0);
@@ -487,6 +502,8 @@ fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, p
             label: state.label.clone(),
             author: author.into(),
             offset,
+            text_size: state.text_size,
+            arrow_size: state.arrow_size,
         }));
         state.cancel();
     }
@@ -564,6 +581,8 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
         });
         ui.add(egui::Slider::new(&mut state.sensitivity, 1.0..=20.0).text(tl!("Sensitivity")));
     }
+    ui.add(egui::Slider::new(&mut state.text_size, measure::TEXT_SIZES).suffix(" pt").text(tl!("Text size")));
+    ui.add(egui::Slider::new(&mut state.arrow_size, measure::ARROW_SIZES).suffix(" pt").logarithmic(true).text(tl!("Arrow size")));
     ui.separator();
     ui.label(tl!("Drawing scale"));
     // "1 mm on the drawing = 100 cm in real life".

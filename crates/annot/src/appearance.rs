@@ -57,7 +57,7 @@ fn extension_lines(d: &Dict, l: &[f64]) -> String {
 ///
 /// Returns false for an unknown style or a non-finite direction, so the caller keeps the
 /// previous appearance instead of writing `NaN`. `None` and a zero-length direction draw nothing.
-fn line_end(c: &mut String, kind: &[u8], tip: (f64, f64), from: (f64, f64), w: f64) -> bool {
+fn line_end(c: &mut String, kind: &[u8], tip: (f64, f64), from: (f64, f64), s: f64) -> bool {
     if kind == b"None" {
         return true;
     }
@@ -75,7 +75,6 @@ fn line_end(c: &mut String, kind: &[u8], tip: (f64, f64), from: (f64, f64), w: f
     if len == 0.0 {
         return true;
     }
-    let s = arrow_size(w);
     if !s.is_finite() {
         return false;
     }
@@ -458,8 +457,11 @@ pub fn build(d: &Dict) -> Option<Stream> {
             c.push_str(&format!("{}{}{} w 1 J 1 j\n{}", rg_stroke(col), rg(fill), n(w), dash(d)));
             c.push_str(&format!("{} {} m {} {} l S\n[] 0 d\n", n(l[0]), n(l[1]), n(l[2]), n(l[3])));
             c.push_str(&extension_lines(d, &l));
+            // A measurement may carry its own arrowhead size (/PCArrowSize, points).
+            let head =
+                d.get(b"PCArrowSize").and_then(Object::as_f64).filter(|v| v.is_finite()).map_or_else(|| arrow_size(w), |v| v.clamp(1.0, 100.0));
             for (end, (tip, from)) in ends.iter().zip([((l[0], l[1]), (l[2], l[3])), ((l[2], l[3]), (l[0], l[1]))]) {
-                if !line_end(&mut c, end, tip, from, w) {
+                if !line_end(&mut c, end, tip, from, head) {
                     return None;
                 }
             }
@@ -515,7 +517,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
                 let (Some(&tip1), Some(&from1)) = (pts.last(), pts.get(pts.len().saturating_sub(2))) else { return None };
                 let fill = interior_color(d, Some(col)).unwrap_or(col);
                 c.push_str(&format!("[] 0 d\n{}", rg(fill)));
-                if !line_end(&mut c, start, tip0, from0, w) || !line_end(&mut c, end, tip1, from1, w) {
+                if !line_end(&mut c, start, tip0, from0, arrow_size(w)) || !line_end(&mut c, end, tip1, from1, arrow_size(w)) {
                     return None;
                 }
             }
@@ -715,7 +717,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
                     c.push_str(&format!("{} {} {}\n", n(p.0), n(p.1), if i == 0 { "m" } else { "l" }));
                 }
                 c.push_str("S\n");
-                if !line_end(&mut c, &end, pts[0], pts[1], lw) {
+                if !line_end(&mut c, &end, pts[0], pts[1], arrow_size(lw)) {
                     return None;
                 }
             }
@@ -784,7 +786,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
     if let Some(value) = d.get(b"PCMeasureValue").and_then(Object::as_string) {
         let value = value.to_text();
         if value.chars().count() <= 256 && matches!(subtype.as_slice(), b"Line" | b"PolyLine" | b"Polygon") {
-            let size = 10.0;
+            let size = d.get(b"PCMeasureTextSize").and_then(Object::as_f64).filter(|v| v.is_finite()).map_or(10.0, |v| v.clamp(4.0, 72.0));
             let col = stroke.unwrap_or([0.0, 0.47, 0.84]);
             // A distance's caption runs along its line, centred and just above it, upright to read.
             let along = nums(d, b"L").filter(|l| subtype == b"Line" && l.len() == 4).and_then(|l| {

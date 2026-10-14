@@ -282,7 +282,16 @@ pub struct NewMeasurement {
     /// them, in user-space units. Positive is to the left of the first-to-second direction; zero
     /// puts the arrows and the text on the measured line itself.
     pub offset: f64,
+    /// Height of the value's text, in points ([`TEXT_SIZES`]).
+    pub text_size: f64,
+    /// Distance only: size of the arrowheads, in points ([`ARROW_SIZES`]).
+    pub arrow_size: f64,
 }
+/// Default text height and arrowhead size, and the accepted ranges (points).
+pub const DEFAULT_TEXT_SIZE: f64 = 10.0;
+pub const DEFAULT_ARROW_SIZE: f64 = 9.0;
+pub const TEXT_SIZES: std::ops::RangeInclusive<f64> = 4.0..=72.0;
+pub const ARROW_SIZES: std::ops::RangeInclusive<f64> = 1.0..=100.0;
 /// Largest accepted dimension-line offset, in user-space units.
 const MAX_OFFSET: f64 = 1e7;
 /// Gap left between the measured point and the start of its extension line, and how far the
@@ -364,6 +373,9 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     if !new.offset.is_finite() || new.offset.abs() > MAX_OFFSET || (new.offset != 0.0 && new.kind != Kind::Distance) {
         return Err(invalid("only a distance can have a dimension-line offset, within 1e7 units"));
     }
+    if !TEXT_SIZES.contains(&new.text_size) || !ARROW_SIZES.contains(&new.arrow_size) {
+        return Err(invalid("text size must be 4 to 72 points and arrow size 1 to 100 points"));
+    }
     let (first, last) = (new.points.first().copied(), new.points.last().copied());
     let (from, to) = (first.ok_or_else(|| invalid("missing start"))?, last.ok_or_else(|| invalid("missing end"))?);
     let (line_from, line_to) =
@@ -388,10 +400,12 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     d.set(b"Subj".to_vec(), PdfString::text(new.kind.name()));
     d.set(b"PCMeasureLabel".to_vec(), PdfString::text(&new.label));
     d.set(b"PCMeasureValue".to_vec(), PdfString::text(&info.label));
+    d.set(b"PCMeasureTextSize".to_vec(), Object::Real(new.text_size));
     if new.kind == Kind::Distance {
         d.set(b"LE".to_vec(), Object::Array(vec![Object::name("ClosedArrow"), Object::name("ClosedArrow")]));
         d.set(b"Cap".to_vec(), Object::Bool(true));
         d.set(b"CP".to_vec(), Object::name("Top"));
+        d.set(b"PCArrowSize".to_vec(), Object::Real(new.arrow_size));
         if new.offset != 0.0 {
             // Extension lines (§12.5.6.7): a positive /LL runs clockwise from the line, back to the measured points.
             let gap = EXTENSION_GAP.min(new.offset.abs() / 2.0);
@@ -402,7 +416,7 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     }
     // Leave room for the readable numeric caption around the geometry.
     if new.kind == Kind::Distance {
-        let width = (info.label.len() as f64 * 6.0).max(40.0);
+        let width = (info.label.len() as f64 * 0.6 * new.text_size).max(4.0 * new.text_size);
         let (dx, dy) = (line_to[0] - line_from[0], line_to[1] - line_from[1]);
         let len = dx.hypot(dy).max(1e-9);
         let (ux, uy) = (dx / len, dy / len);
@@ -410,8 +424,8 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
         let mut xs = vec![line_from[0], line_to[0], from[0], to[0]];
         let mut ys = vec![line_from[1], line_to[1], from[1], to[1]];
         for (s, t) in [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)] {
-            xs.push(mid[0] + ux * width * 0.5 * s - uy * 16.0 * t);
-            ys.push(mid[1] + uy * width * 0.5 * s + ux * 16.0 * t);
+            xs.push(mid[0] + ux * width * 0.5 * s - uy * 1.6 * new.text_size * t);
+            ys.push(mid[1] + uy * width * 0.5 * s + ux * 1.6 * new.text_size * t);
         }
         let fold = |v: &[f64], f: fn(f64, f64) -> f64, init: f64| v.iter().copied().fold(init, f);
         let pad = EXTENSION_PAST + 4.0;
@@ -427,9 +441,9 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     } else if let Some(rect) = d.get(b"Rect").and_then(Object::as_array) {
         let values: Option<Vec<f64>> = rect.iter().map(Object::as_f64).collect();
         if let Some(v) = values.filter(|v| v.len() == 4) {
-            let width = (info.label.len() as f64 * 6.0).max(40.0);
+            let width = (info.label.len() as f64 * 0.6 * new.text_size).max(4.0 * new.text_size);
             let cx = (v[0] + v[2]) * 0.5;
-            d.set(b"Rect".to_vec(), nums([v[0].min(cx - width / 2.0), v[1], v[2].max(cx + width / 2.0), v[3] + 16.0]));
+            d.set(b"Rect".to_vec(), nums([v[0].min(cx - width / 2.0), v[1], v[2].max(cx + width / 2.0), v[3] + 1.6 * new.text_size]));
         }
     }
     doc.update_dict(r, |target| *target = d).map_err(|e| invalid(&e.to_string()))?;

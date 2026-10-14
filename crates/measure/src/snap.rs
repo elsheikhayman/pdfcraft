@@ -5,10 +5,10 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 use serde::Serialize;
 use std::collections::HashSet;
 
-const MAX_SEGMENTS: usize = 250_000;
+const MAX_SEGMENTS: usize = 20_000;
 /// Endpoints and midpoints together, across the whole page.
 const MAX_TARGETS: usize = 2 * MAX_SEGMENTS;
-const MAX_BYTES: usize = 64 * 1024 * 1024;
+const MAX_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Clone, Debug, Default)]
 pub struct Geometry {
     pub segments: Vec<[Point; 2]>,

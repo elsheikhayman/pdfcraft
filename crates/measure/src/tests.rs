@@ -196,7 +196,7 @@ fn nested_forms_transforms_curves_and_cycles_are_bounded() {
     assert!(geometry.endpoints.contains(&[120.0, 200.0]));
     assert!(geometry.midpoints.contains(&[110.0, 222.5]));
     assert!(geometry.segments.len() > 4 && geometry.segments.len() < 200);
-    let d = fixture(&"0 0 m 1 1 l S ".repeat(250_001), "", &[]);
+    let d = fixture(&"0 0 m 1 1 l S ".repeat(20_001), "", &[]);
     assert!(snap::geometry(&d, 0).unwrap().truncated);
 }
 #[test]
@@ -261,13 +261,13 @@ fn degenerate_and_dense_paths_keep_snap_targets_bounded() {
     let g = snap::geometry(&d, 0).unwrap();
     assert!(g.segments.is_empty() && g.endpoints.is_empty() && g.midpoints.is_empty(), "{} {}", g.endpoints.len(), g.midpoints.len());
     // Every paint drains into the page geometry; the page-wide target cap still holds.
-    let d = fixture(&"0 0 1 1 re f ".repeat(70_000), "", &[]);
+    let d = fixture(&"0 0 1 1 re f ".repeat(30_000), "", &[]);
     let g = snap::geometry(&d, 0).unwrap();
     assert!(g.truncated);
-    assert!(g.endpoints.len() + g.midpoints.len() <= 500_000 + 12, "{}", g.endpoints.len() + g.midpoints.len());
-    assert!(g.segments.len() <= 250_000 + 4);
+    assert!(g.endpoints.len() + g.midpoints.len() <= 40_000 + 12, "{}", g.endpoints.len() + g.midpoints.len());
+    assert!(g.segments.len() <= 20_000 + 4);
     // Unpainted curves and lines are capped too.
-    let d = fixture(&"0 0 m 5 9 1 9 7 0 c 0 3 l ".repeat(150_000), "", &[]);
+    let d = fixture(&"0 0 m 5 9 1 9 7 0 c 0 3 l ".repeat(30_000), "", &[]);
     let g = snap::geometry(&d, 0).unwrap();
     assert!(g.truncated && g.endpoints.is_empty());
 }

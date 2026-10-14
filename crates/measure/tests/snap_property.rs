@@ -9,7 +9,7 @@ use pdfcraft_measure::snap::{self, Geometry, SnapOptions};
 const CASES: usize = 1_000;
 const SEED: u64 = 1;
 const MAX_CONTENT_BYTES: usize = 16 * 1024;
-const MAX_GEOMETRY_SEGMENTS: usize = 250_000;
+const MAX_GEOMETRY_SEGMENTS: usize = 20_000;
 const MAX_SNAP_TARGETS: usize = 2 * MAX_GEOMETRY_SEGMENTS + 12;
 
 const SEEDS: &[&[u8]] = &[
@@ -171,7 +171,7 @@ fn mutated_snap_geometry_stays_bounded_and_finite() {
 
 #[test]
 fn high_curvature_geometry_hits_segment_cap() {
-    let stress_curve = b"0 0 m 0 100000000 100000000 100000000 100000000 0 c S ".repeat(120);
+    let stress_curve = b"0 0 m 0 100000000 100000000 100000000 100000000 0 c S ".repeat(6);
     let geometry = check_snap_invariants(&stress_curve);
     assert!(geometry.truncated, "high-curvature geometry did not report its extraction cap ({} segments)", geometry.segments.len());
 }

@@ -43,9 +43,9 @@ impl Tool {
 const REAL_UNITS: [(&str, f64); 6] = [("mm", 1.0), ("cm", 10.0), ("m", 1000.0), ("km", 1_000_000.0), ("in", 25.4), ("ft", 304.8)];
 /// A calibration waiting for the real length: the distance clicked on the page, in view points.
 pub struct Calibration {
-    measured: f64,
-    text: String,
-    unit: String,
+    pub measured: f64,
+    pub text: String,
+    pub unit: String,
     error: Option<String>,
 }
 pub struct MeasureView {

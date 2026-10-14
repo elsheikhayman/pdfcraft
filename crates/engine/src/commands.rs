@@ -209,6 +209,9 @@ pub const COMMANDS: &[CommandSpec] = &[
     // View menu (where it would show twice). The palette and ⌘3 still run it.
     c("view.fit_visible", "Fit visible", None, Some(Shortcut::cmd("3")), Document, "scan"),
     c("view.marquee_zoom", "Marquee zoom", VIEW, None, Document, "zoom-in"),
+    // Illustrator's Outline view: the page's vector paths as hairlines (and over the faded page).
+    c("view.outline", "Outline view", VIEW, Some(Shortcut::cmd("Y")), Document, "scan"),
+    c("view.outline_overlay", "Outline over page", VIEW, None, Document, "scan"),
     // Acrobat's column select: drag a rectangle and select only the text inside it. Alt/Option-
     // drag with the Select tool does the same; this is the way in where the desktop takes
     // Alt-drag for moving windows (several Linux window managers).

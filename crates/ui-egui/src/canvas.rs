@@ -409,6 +409,9 @@ pub struct DocView {
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
     pub measure: crate::measure_ui::MeasureView,
+    /// Outline view (Ctrl+Y): the page's paths as hairlines, and the per-page lines it draws.
+    pub outline: crate::outline_view::Outline,
+    pub outline_cache: crate::outline_view::OutlineCache,
     /// Form filling state: the focused field.
     pub forms: crate::forms_ui::FormView,
     /// Prepare a form: the selected field and the gesture in progress.
@@ -660,6 +663,8 @@ impl DocView {
             slow_pages: HashSet::new(),
             comments: Default::default(),
             measure: Default::default(),
+            outline: Default::default(),
+            outline_cache: Default::default(),
             forms: Default::default(),
             prepare: Default::default(),
             content: Default::default(),
@@ -2469,6 +2474,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 let msg =
                     ui.fonts_mut(|f| f.layout(message, theme::regular(12.5), Color32::from_rgb(0x6A, 0x2A, 0x2A), (r.width() - 40.0).max(80.0)));
                 painter.galley(pos2(r.center().x - msg.size().x / 2.0, r.center().y), msg, Color32::BLACK);
+            } else if view.outline == crate::outline_view::Outline::Paths {
+                crate::outline_view::paint(painter, &xf, i, doc, &info.pages[i], &mut view.outline_cache, visible);
             } else {
                 let (pw_pt, ph_pt) = (info.pages[i].width.max(1.0), info.pages[i].height.max(1.0));
                 // A GPU may take smaller textures than these (OpenGL drivers report as little as
@@ -2569,6 +2576,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                         }
                     }
                 }
+            }
+            if view.outline == crate::outline_view::Outline::Overlay {
+                crate::outline_view::fade(painter, r);
+                crate::outline_view::paint(painter, &xf, i, doc, &info.pages[i], &mut view.outline_cache, visible);
             }
             view.text_background.paint(painter, &xf, i, view.line_editor.as_ref());
             if editing_content {

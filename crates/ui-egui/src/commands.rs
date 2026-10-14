@@ -252,6 +252,13 @@ impl PdfCraftApp {
                     self.views[i].set_fit(fit);
                 }
             }
+            "view.outline" | "view.outline_overlay" => {
+                use crate::outline_view::Outline;
+                if let Some(i) = active {
+                    let to = if id == "view.outline" { Outline::Paths } else { Outline::Overlay };
+                    self.views[i].outline = self.views[i].outline.toggled(to);
+                }
+            }
             "view.full_screen" => {
                 let on = !self.full_screen;
                 match self.ctx.clone() {

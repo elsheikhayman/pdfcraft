@@ -52,6 +52,7 @@ mod marks_ui;
 mod measure_ui;
 mod ocr_ui;
 mod optimize_ui;
+mod outline_view;
 mod search_ui;
 mod sign_ui;
 mod stamps_ui;
@@ -2406,6 +2407,14 @@ impl PdfCraftApp {
             ("layout", Some(v)) => {
                 let (layout, continuous) = canvas::parse_display_token(value).ok_or("layout must be single, continuous, two-up or two-page")?;
                 v.set_display(layout, continuous);
+            }
+            ("outline", Some(v)) => {
+                v.outline = match value {
+                    "off" => outline_view::Outline::Off,
+                    "paths" => outline_view::Outline::Paths,
+                    "overlay" => outline_view::Outline::Overlay,
+                    _ => return Err("outline must be off, paths, or overlay".into()),
+                }
             }
             ("continuous", Some(v)) => match value {
                 "on" => v.set_continuous(true),

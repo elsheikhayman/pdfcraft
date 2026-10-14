@@ -2353,8 +2353,16 @@ animation effects	Off	Aus
 	This document is trying to open a local file:	Dieses Dokument versucht, eine lokale Datei zu öffnen:
 	Move tag earlier	Tag früher verschieben
 	Move tag later	Tag später verschieben
+	Calibrate scale	Maßstab kalibrieren
+	Enter a length greater than zero.	Gib eine Länge größer als null ein.
+	Length	Länge
+	Measured on the drawing	Auf der Zeichnung gemessen
 	Ortho	Ortho
+	Pick two different points.	Wähle zwei verschiedene Punkte.
+	Ratio	Verhältnis
+	Set scale	Maßstab festlegen
 	Snap	Einrasten
+	What is the real length between these two points?	Wie lang ist die tatsächliche Strecke zwischen diesen beiden Punkten?
 	off	aus
 	on	ein
 	Outline view	Pfadansicht

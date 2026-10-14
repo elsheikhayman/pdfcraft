@@ -2265,8 +2265,16 @@ animation effects	Off	Выкл
 	This document is trying to open a local file:	Этот документ пытается открыть локальный файл:
 	Move tag earlier	Переместить тег раньше
 	Move tag later	Переместить тег позже
+	Calibrate scale	Калибровка масштаба
+	Enter a length greater than zero.	Введите длину больше нуля.
+	Length	Длина
+	Measured on the drawing	Измерено на чертеже
 	Ortho	Орто
+	Pick two different points.	Выберите две разные точки.
+	Ratio	Соотношение
+	Set scale	Задать масштаб
 	Snap	Привязка
+	What is the real length between these two points?	Какова реальная длина между этими двумя точками?
 	off	выкл.
 	on	вкл.
 	Outline view	Режим контуров

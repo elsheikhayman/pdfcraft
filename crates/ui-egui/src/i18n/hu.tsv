@@ -2351,8 +2351,16 @@ animation effects	Off	Ki
 	This document is trying to open a local file:	Ez a dokumentum egy helyi fájlt próbál megnyitni:
 	Move tag earlier	Címke korábbra helyezése
 	Move tag later	Címke későbbre helyezése
+	Calibrate scale	Méretarány kalibrálása
+	Enter a length greater than zero.	Adj meg nullánál nagyobb hosszt.
+	Length	Hossz
+	Measured on the drawing	Mért érték a rajzon
 	Ortho	Orto
+	Pick two different points.	Válassz két különböző pontot.
+	Ratio	Arány
+	Set scale	Méretarány beállítása
 	Snap	Illesztés
+	What is the real length between these two points?	Mekkora a valódi hossz e két pont között?
 	off	ki
 	on	be
 	Outline view	Körvonalnézet

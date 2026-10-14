@@ -2350,8 +2350,16 @@ animation effects	Off	Өшірулі
 	This document is trying to open a local file:	Бұл құжат жергілікті файлды ашуға әрекеттеніп жатыр:
 	Move tag earlier	Тегті ертерек жылжыту
 	Move tag later	Тегті кейінірек жылжыту
+	Calibrate scale	Масштабты калибрлеу
+	Enter a length greater than zero.	Нөлден үлкен ұзындықты енгізіңіз.
+	Length	Ұзындық
+	Measured on the drawing	Сызбада өлшенгені
 	Ortho	Орто
+	Pick two different points.	Екі түрлі нүктені таңдаңыз.
+	Ratio	Қатынас
+	Set scale	Масштабты орнату
 	Snap	Тіркеу
+	What is the real length between these two points?	Осы екі нүктенің арасындағы нақты ұзындық қанша?
 	off	өшірулі
 	on	қосулы
 	Outline view	Контур көрінісі

@@ -2348,8 +2348,16 @@ animation effects	Off	Kapalı
 	This document is trying to open a local file:	Bu belge yerel bir dosya açmaya çalışıyor:
 	Move tag earlier	Etiketi daha erken taşı
 	Move tag later	Etiketi daha geç taşı
+	Calibrate scale	Ölçeği kalibre et
+	Enter a length greater than zero.	Sıfırdan büyük bir uzunluk girin.
+	Length	Uzunluk
+	Measured on the drawing	Çizimde ölçülen
 	Ortho	Orto
+	Pick two different points.	İki farklı nokta seçin.
+	Ratio	Oran
+	Set scale	Ölçeği ayarla
 	Snap	Yakalama
+	What is the real length between these two points?	Bu iki nokta arasındaki gerçek uzunluk nedir?
 	off	kapalı
 	on	açık
 	Outline view	Anahat görünümü

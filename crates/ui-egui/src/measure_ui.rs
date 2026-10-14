@@ -1,5 +1,5 @@
 //! Measure objects: page-space clicks, live readings and persistent drawing scales.
-use crate::{LeftPanel, PdfCraftApp, QuickTool, canvas::DocView, theme::Tokens, widgets};
+use crate::{LeftPanel, PdfCraftApp, QuickTool, canvas::DocView, theme::Tokens, units::Unit, widgets};
 use egui::{Color32, Pos2, Stroke};
 use pdfcraft_engine::{
     Document, Edit, Style,
@@ -39,6 +39,15 @@ impl Tool {
         }
     }
 }
+/// Real-world units offered next to the scale: name and millimetres per unit.
+const REAL_UNITS: [(&str, f64); 6] = [("mm", 1.0), ("cm", 10.0), ("m", 1000.0), ("km", 1_000_000.0), ("in", 25.4), ("ft", 304.8)];
+/// A calibration waiting for the real length: the distance clicked on the page, in view points.
+pub struct Calibration {
+    measured: f64,
+    text: String,
+    unit: String,
+    error: Option<String>,
+}
 pub struct MeasureView {
     pub points: Vec<Point>,
     pub page: Option<usize>,
@@ -52,7 +61,12 @@ pub struct MeasureView {
     pub ortho: bool,
     pub sensitivity: f64,
     pub drawing_points: f64,
+    /// The unit the drawing side of the scale is shown in ("1 mm = 100 cm").
+    pub paper_unit: Unit,
     pub real_distance: f64,
+    pub calibration: Option<Calibration>,
+    /// A scale field changed and is not stored in the page yet; applied once the field is released.
+    scale_dirty: bool,
     pub unit: String,
     pub precision: u8,
     pub name: String,
@@ -80,7 +94,10 @@ impl Default for MeasureView {
             ortho: false,
             sensitivity: 6.0,
             drawing_points: 72.0,
+            paper_unit: Unit::Millimetres,
             real_distance: 1.0,
+            calibration: None,
+            scale_dirty: false,
             unit: "in".into(),
             precision: 2,
             name: "Drawing scale".into(),
@@ -368,7 +385,12 @@ fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, p
             let a = doc.measurement_to_view(page, *a);
             let b = doc.measurement_to_view(page, *b);
             if let (Ok(a), Ok(b)) = (a, b) {
-                state.drawing_points = measure::distance(a, b);
+                let measured = measure::distance(a, b);
+                if measured.is_finite() && measured > 1e-9 {
+                    state.calibration = Some(Calibration { measured, text: String::new(), unit: state.unit.clone(), error: None });
+                } else {
+                    state.error = Some(tl!("Pick two different points.").into());
+                }
             }
         }
         state.cancel();
@@ -412,18 +434,23 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
     let Some(doc) = app.session.get(id) else { return };
     let units = app.units;
     let page = app.views[index].current;
-    let info = doc.info.pages.get(page).cloned();
     let state = &mut app.views[index].measure;
     if state.listing.as_ref().is_none_or(|(g, _)| *g != doc.edit_generation()) {
         state.listing = Some((doc.edit_generation(), doc.measurements()));
     }
     if state.seeded_page != Some(page) {
+        // First seed: show the page side in the app's unit, so an unscaled page reads
+        // "1 in = 1 in" (or "1 mm = 1 mm"), true size. Later pages keep the user's choice.
+        if state.seeded_page.is_none() {
+            state.paper_unit = units;
+        }
         state.seeded_page = Some(page);
-        if let (Ok(a), Ok(b)) = (doc.measurement_to_user(page, [0.0, 0.0]), doc.measurement_to_user(page, [72.0, 0.0]))
+        let one = 1.0 / state.paper_unit.per_point();
+        if let (Ok(a), Ok(b)) = (doc.measurement_to_user(page, [0.0, 0.0]), doc.measurement_to_user(page, [one, 0.0]))
             && let Ok(scale) = doc.measurement_scale_or(page, a, units.per_point(), units.label())
             && let Ok(reading) = measure::reading(Kind::Distance, &[a, b], &scale)
         {
-            state.drawing_points = 72.0;
+            state.drawing_points = one;
             state.real_distance = reading.value;
             state.unit = scale.unit;
             state.precision = scale.precision;
@@ -462,33 +489,69 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
     }
     ui.separator();
     ui.label(tl!("Drawing scale"));
+    // "1 mm on the drawing = 100 cm in real life".
+    // Edits to the scale fields are stored in the page when the field is released, so nobody
+    // has to know to press Apply (the readings use the stored scale).
+    let (mut changed, mut busy, mut picked) = (false, false, false);
+    let mut track = |r: egui::Response| {
+        changed |= r.changed();
+        busy |= r.dragged() || r.has_focus();
+    };
     ui.horizontal(|ui| {
-        ui.add(egui::DragValue::new(&mut state.drawing_points).range(0.000001..=1e9).prefix("pt "));
+        let k = state.paper_unit.per_point();
+        let mut paper = state.drawing_points * k;
+        let r = ui.add(egui::DragValue::new(&mut paper).range(0.000001..=1e9).speed(0.1).max_decimals(6));
+        if r.changed() && paper.is_finite() && paper > 0.0 {
+            state.drawing_points = paper / k;
+        }
+        track(r);
+        egui::ComboBox::from_id_salt("scale-paper-unit").width(54.0).selected_text(state.paper_unit.label()).show_ui(ui, |ui| {
+            for u in Unit::ALL {
+                if ui.selectable_label(state.paper_unit == u, u.label()).clicked() {
+                    // Keep the length on the page; only the unit it is shown in changes.
+                    state.paper_unit = u;
+                }
+            }
+        });
         ui.label("=");
-        ui.add(egui::DragValue::new(&mut state.real_distance).range(0.000001..=1e12));
+        track(ui.add(egui::DragValue::new(&mut state.real_distance).range(0.000001..=1e12).speed(0.1).max_decimals(6)));
+        track(ui.add(crate::widgets::line(&mut state.unit).desired_width(44.0).char_limit(12)));
+        ui.menu_button("▾", |ui| {
+            for (name, _) in REAL_UNITS {
+                if ui.button(name).clicked() {
+                    state.unit = name.into();
+                    picked = true;
+                    ui.close();
+                }
+            }
+        });
     });
+    if let Some(ratio) = ratio_text(state.drawing_points, state.real_distance, &state.unit) {
+        ui.label(egui::RichText::new(ratio).weak());
+    }
     ui.horizontal(|ui| {
-        ui.label(tl!("Unit"));
-        ui.add(crate::widgets::line(&mut state.unit).desired_width(64.0).char_limit(12));
-        ui.add(egui::DragValue::new(&mut state.precision).range(0..=6).prefix(format!("{} ", tl!("Decimals"))));
+        ui.label(tl!("Decimals"));
+        track(ui.add(egui::DragValue::new(&mut state.precision).range(0..=6)));
     });
     if ui.button(tl!("Calibrate from two points")).clicked() {
         tool = Some(Tool::Calibrate);
     }
-    ui.add(widgets::checkbox(&mut state.whole_page, tl!("Entire page")));
+    track(ui.add(widgets::checkbox(&mut state.whole_page, tl!("Entire page"))));
     if !state.whole_page {
         ui.label(tl!("Viewport rectangle in page points (x, y, width, height)"));
         for (i, name) in ["X", "Y", "Width", "Height"].iter().enumerate() {
             if let Some(v) = state.rect.get_mut(i) {
-                ui.add(egui::DragValue::new(v).range(0.0..=1e9).prefix(format!("{}: ", tl!(name))));
+                track(ui.add(egui::DragValue::new(v).range(0.0..=1e9).prefix(format!("{}: ", tl!(name)))));
             }
         }
     }
     ui.horizontal(|ui| {
         ui.label(tl!("Viewport"));
-        ui.add(crate::widgets::line(&mut state.name).desired_width(130.0).char_limit(128));
+        track(ui.add(crate::widgets::line(&mut state.name).desired_width(130.0).char_limit(128)));
     });
-    let apply = ui.add_enabled(doc.allows_annotation(), egui::Button::new(tl!("Apply scale"))).clicked();
+    state.scale_dirty |= changed || picked;
+    let apply = ui.add_enabled(doc.allows_annotation(), egui::Button::new(tl!("Apply scale"))).clicked()
+        || (state.scale_dirty && !busy && doc.allows_annotation());
     if let Some(error) = &state.error {
         ui.colored_label(Color32::from_rgb(190, 50, 50), error);
     }
@@ -517,24 +580,11 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
         }
     }
     let export = ui.button(tl!("Export measurements as CSV")).clicked();
-    if apply && let Some(info) = info {
-        let result =
-            doc.measurement_to_user(page, [0.0, 0.0]).and_then(|a| doc.measurement_to_user(page, [1.0, 0.0]).map(|b| (a, b))).and_then(|(a, b)| {
-                Scale::calibrate(a, b, state.real_distance / state.drawing_points, &state.unit, state.precision).map_err(|e| e.to_string())
-            });
-        match result {
-            Ok(scale) => {
-                let [x, y, w, h] = if state.whole_page { [0.0, 0.0, f64::from(info.width), f64::from(info.height)] } else { state.rect };
-                let a = info.view_to_user(x as f32, y as f32);
-                let b = info.view_to_user((x + w) as f32, (y + h) as f32);
-                app.views[index].pending_edit = Some(Edit::SetMeasurementScale {
-                    page,
-                    bbox: [f64::from(a[0].min(b[0])), f64::from(a[1].min(b[1])), f64::from(a[0].max(b[0])), f64::from(a[1].max(b[1]))],
-                    name: state.name.clone(),
-                    scale,
-                });
-            }
-            Err(e) => state.error = Some(e.to_string()),
+    if apply {
+        state.scale_dirty = false;
+        match scale_edit(doc, page, state) {
+            Ok(edit) => app.views[index].pending_edit = Some(edit),
+            Err(e) => state.error = Some(e),
         }
     }
     if let Some((page, annotation, reading, scale)) = select {
@@ -552,9 +602,112 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
         export_csv(app);
     }
 }
+/// The edit that stores the scale in `state` as a viewport on `page` (the whole page or the rectangle).
+fn scale_edit(doc: &Document, page: usize, state: &MeasureView) -> Result<Edit, String> {
+    let info = doc.info.pages.get(page).ok_or_else(|| "no such page".to_string())?;
+    let (a, b) = (doc.measurement_to_user(page, [0.0, 0.0])?, doc.measurement_to_user(page, [1.0, 0.0])?);
+    let scale = Scale::calibrate(a, b, state.real_distance / state.drawing_points, &state.unit, state.precision).map_err(|e| e.to_string())?;
+    let [x, y, w, h] = if state.whole_page { [0.0, 0.0, f64::from(info.width), f64::from(info.height)] } else { state.rect };
+    let a = info.view_to_user(x as f32, y as f32);
+    let b = info.view_to_user((x + w) as f32, (y + h) as f32);
+    Ok(Edit::SetMeasurementScale {
+        page,
+        bbox: [f64::from(a[0].min(b[0])), f64::from(a[1].min(b[1])), f64::from(a[0].max(b[0])), f64::from(a[1].max(b[1]))],
+        name: state.name.clone(),
+        scale,
+    })
+}
+/// "Ratio 1 : 100" when both sides are lengths with a known size; `None` for custom units.
+fn ratio_text(drawing_points: f64, real: f64, real_unit: &str) -> Option<String> {
+    let per_mm = REAL_UNITS.iter().find(|(n, _)| n.eq_ignore_ascii_case(real_unit.trim()))?.1;
+    let paper_mm = drawing_points * 25.4 / 72.0;
+    let ratio = real * per_mm / paper_mm;
+    (ratio.is_finite() && ratio > 0.0)
+        .then(|| if ratio >= 1.0 { format!("{} 1 : {}", tl!("Ratio"), trim(ratio)) } else { format!("{} {} : 1", tl!("Ratio"), trim(1.0 / ratio)) })
+}
+fn trim(v: f64) -> String {
+    let s = format!("{v:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+/// Asks for the real length of the two clicked points, then stores the resulting scale.
+pub(crate) fn calibrate_dialog(app: &mut PdfCraftApp, ctx: &egui::Context) {
+    let Some((index, id)) = app.active_ids() else { return };
+    let Some(state) = app.views.get_mut(index).map(|v| &mut v.measure) else { return };
+    let Some(cal) = state.calibration.as_mut() else { return };
+    let (mut ok, mut cancel) = (false, false);
+    let paper = state.paper_unit;
+    let modal = widgets::show_modal(ctx, "measure-calibrate", |ui| {
+        ui.set_width(340.0);
+        ui.label(egui::RichText::new(tl!("Calibrate scale")).font(crate::theme::semibold(16.0)));
+        ui.add_space(6.0);
+        ui.label(format!("{}: {:.2} {}", tl!("Measured on the drawing"), cal.measured * paper.per_point(), paper.label()));
+        ui.label(tl!("What is the real length between these two points?"));
+        ui.horizontal(|ui| {
+            let edit = ui.add(widgets::line(&mut cal.text).desired_width(110.0).char_limit(24).hint_text(tl!("Length")));
+            if !edit.has_focus() && cal.text.is_empty() {
+                edit.request_focus();
+            }
+            ui.add(widgets::line(&mut cal.unit).desired_width(48.0).char_limit(12));
+            ui.menu_button("▾", |ui| {
+                for (name, _) in REAL_UNITS {
+                    if ui.button(name).clicked() {
+                        cal.unit = name.into();
+                        ui.close();
+                    }
+                }
+            });
+            if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                ok = true;
+            }
+        });
+        if let Some(e) = &cal.error {
+            ui.colored_label(Color32::from_rgb(190, 50, 50), e);
+        }
+        ui.add_space(8.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ok |= widgets::pill_button(ui, tl!("Set scale"), true).clicked();
+            cancel |= widgets::pill_button(ui, tl!("Cancel"), false).clicked();
+        });
+    });
+    cancel |= modal.should_close();
+    if cancel {
+        state.calibration = None;
+        return;
+    }
+    if !ok {
+        return;
+    }
+    let value = cal.text.trim().replace(',', ".").parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0);
+    let Some(value) = value else {
+        cal.error = Some(tl!("Enter a length greater than zero.").into());
+        return;
+    };
+    state.drawing_points = cal.measured;
+    state.real_distance = value;
+    state.unit = cal.unit.trim().to_string();
+    state.calibration = None;
+    let Some(doc) = app.session.get(id) else { return };
+    let page = app.views[index].current;
+    let state = &mut app.views[index].measure;
+    match scale_edit(doc, page, state) {
+        Ok(edit) => {
+            app.views[index].pending_edit = Some(edit);
+            app.quick_tool = QuickTool::Measure(Tool::Distance);
+        }
+        Err(e) => state.error = Some(e),
+    }
+}
+/// Opening Measure picks Distance, so a click on the page measures straight away. A tool the
+/// user already chose (Perimeter, Area) stays.
+pub(crate) fn default_tool(app: &mut PdfCraftApp) {
+    if !matches!(app.quick_tool, QuickTool::Measure(_)) {
+        app.quick_tool = QuickTool::Measure(Tool::Distance);
+    }
+}
 pub(crate) fn command(app: &mut PdfCraftApp, id: &str) {
     app.left = LeftPanel::Tool("measure");
     app.left_open = true;
+    default_tool(app);
     if let Some((index, _)) = app.active_ids()
         && let Some(tool) = id.strip_prefix("measure.").and_then(Tool::from_name)
     {

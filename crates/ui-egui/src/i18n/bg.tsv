@@ -2315,8 +2315,16 @@ animation effects	Off	Изключени
 	This document is trying to open a local file:	Този документ се опитва да отвори локален файл:
 	Move tag earlier	Преместване на етикета по-рано
 	Move tag later	Преместване на етикета по-късно
+	Calibrate scale	Калибриране на мащаба
+	Enter a length greater than zero.	Въведете дължина, по-голяма от нула.
+	Length	Дължина
+	Measured on the drawing	Измерено върху чертежа
 	Ortho	Орто
+	Pick two different points.	Изберете две различни точки.
+	Ratio	Съотношение
+	Set scale	Задай мащаб
 	Snap	Прилепване
+	What is the real length between these two points?	Каква е реалната дължина между тези две точки?
 	off	изкл.
 	on	вкл.
 	Outline view	Контурен изглед

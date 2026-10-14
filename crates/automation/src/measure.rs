@@ -29,6 +29,7 @@ impl Automation {
         let (page, points) = self.measurement_points(a)?;
         let at = points.first().copied().ok_or_else(|| failed("measurement needs points"))?;
         let scale = self.doc(a)?.measurement_scale(page, at).map_err(failed)?;
+        let offset = self.dimension_offset(a, page, kind, &points)?;
         let edit = Edit::AddMeasurement(NewMeasurement {
             page,
             kind,
@@ -37,8 +38,34 @@ impl Automation {
             style: Style { color: [0.0, 0.47, 0.84], ..Style::default() },
             label: a.opt_str("label")?.unwrap_or("").into(),
             author: a.opt_str("author")?.unwrap_or(super::comments::DEFAULT_AUTHOR).into(),
+            offset,
         });
         self.apply(a, edit)
+    }
+    /// `offset` (page points, default 0) moves a distance's dimension line sideways, towards the
+    /// (-dy, dx) normal of the first-to-second direction in page coordinates. Returns user-space units.
+    fn dimension_offset(&self, a: &Args, page: usize, kind: Kind, points: &[measure::Point]) -> Result<f64> {
+        let Some(offset) = a.opt_num("offset")? else { return Ok(0.0) };
+        if kind != Kind::Distance {
+            return Err(failed("offset applies to distance measurements only"));
+        }
+        if !offset.is_finite() || offset.abs() > 1e9 {
+            return Err(failed("offset must be finite and within 1e9 points"));
+        }
+        let (Some(&p), Some(&q)) = (points.first(), points.last()) else { return Err(failed("measurement needs points")) };
+        let doc = self.doc(a)?;
+        let (pv, qv) = (doc.measurement_to_view(page, p).map_err(failed)?, doc.measurement_to_view(page, q).map_err(failed)?);
+        let (dx, dy) = (qv[0] - pv[0], qv[1] - pv[1]);
+        let len = dx.hypot(dy);
+        if !(len.is_finite() && len > 1e-9) {
+            return Err(failed("offset needs two distinct points"));
+        }
+        let mid = [(pv[0] + qv[0]) * 0.5, (pv[1] + qv[1]) * 0.5];
+        let moved = doc.measurement_to_user(page, [mid[0] - dy / len * offset, mid[1] + dx / len * offset]).map_err(failed)?;
+        let mid_user = doc.measurement_to_user(page, mid).map_err(failed)?;
+        let (ux, uy) = (q[0] - p[0], q[1] - p[1]);
+        let ulen = ux.hypot(uy).max(1e-9);
+        Ok(((moved[0] - mid_user[0]) * -uy + (moved[1] - mid_user[1]) * ux) / ulen)
     }
     pub(crate) fn measurement_info(&self, a: &Args) -> Result<Value> {
         let (page, points) = self.measurement_points(a)?;

@@ -4,6 +4,8 @@ Layer L4 implements distance, connected-line perimeter and simple polygon area m
 
 Measurements are ordinary Line, PolyLine or Polygon annotations with a rectilinear Measure dictionary and a normal appearance containing the numeric caption. Their scale is stored with the annotation, so changing a drawing scale does not change earlier measurements. Moving, restyling, replying to and deleting them uses the existing comment workflow.
 
+A distance can be placed like an AutoCAD aligned dimension: `NewMeasurement::offset` moves the dimension line sideways, and the arrows and the value follow it with extension lines (`/LL`, `/LLO`, `/LLE`, clockwise when positive); the saved line is the dimension line and the value is unchanged. The desktop tool takes the offset from the pointer after the second point; automation's `offset` is in page points. Only aligned dimensions are written, so a horizontal or vertical dimension of an inclined line is not supported.
+
 Scale::calibrate derives a conversion from two points and a known real-world distance. set_scale appends a named rectangular page viewport, preserving existing viewports. scale_at selects the last viewport containing the first measurement vertex. Default measurements account for UserUnit; display-coordinate conversion accounts for crop boxes and page rotation.
 
 The desktop Measure objects panel exposes all three tools, live values and coordinate deltas, 45-degree constraints, vertex cancellation, snapping, calibration and CSV export. Automation provides measure_distance, measure_perimeter, measure_area, measure_info, measure_list, measure_scale, measure_snap and measure_export. Tool coordinates and explicit units-per-point scales use physical display points.

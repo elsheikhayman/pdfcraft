@@ -47,7 +47,7 @@ fn measure_points() -> Value {
 }
 fn measure_schema() -> Value {
     schema(
-        json!({"doc":doc(),"page":{"type":"integer","minimum":1},"points":measure_points(),"label":{"type":"string","maxLength":512},"author":{"type":"string","maxLength":512}}),
+        json!({"doc":doc(),"page":{"type":"integer","minimum":1},"points":measure_points(),"label":{"type":"string","maxLength":512},"author":{"type":"string","maxLength":512},"offset":{"type":"number","description":"Distance only: page points to move the dimension line (with its arrows and text) sideways, towards the (-dy, dx) normal of the first-to-second direction in page coordinates. Default 0."}}),
         &["doc", "page", "points"],
     )
 }

@@ -31,6 +31,28 @@ pub(crate) fn known_ending(kind: &[u8]) -> bool {
     std::str::from_utf8(kind).ok().and_then(crate::LineEnding::parse).is_some()
 }
 
+/// The extension lines of a dimension line `l` (§12.5.6.7): `/LL` long, perpendicular to the line,
+/// clockwise from it when positive; `/LLO` of empty space at the measured end and `/LLE` of
+/// extension past the line on the other side. Empty when `/LL` is absent, zero or not finite.
+fn extension_lines(d: &Dict, l: &[f64]) -> String {
+    let num = |k: &[u8]| d.get(k).and_then(Object::as_f64).filter(|v| v.is_finite());
+    let (Some(ll), &[x0, y0, x1, y1]) = (num(b"LL").filter(|v| *v != 0.0), l) else { return String::new() };
+    let len = (x1 - x0).hypot(y1 - y0);
+    if !(len.is_finite() && len > 1e-9) {
+        return String::new();
+    }
+    // Clockwise side of the start-to-end direction.
+    let (rx, ry) = ((y1 - y0) / len * ll.signum(), -(x1 - x0) / len * ll.signum());
+    let reach = ll.abs();
+    let gap = num(b"LLO").unwrap_or(0.0).clamp(0.0, reach);
+    let past = num(b"LLE").unwrap_or(0.0).clamp(0.0, 1e6);
+    let mut out = String::new();
+    for (x, y) in [(x0, y0), (x1, y1)] {
+        out.push_str(&format!("{} {} m {} {} l S\n", n(x - rx * past), n(y - ry * past), n(x + rx * (reach - gap)), n(y + ry * (reach - gap))));
+    }
+    out
+}
+
 /// Draw a line ending (`/LE`) at `tip`, for a line arriving from `from`.
 ///
 /// Returns false for an unknown style or a non-finite direction, so the caller keeps the
@@ -435,6 +457,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
             let fill = interior_color(d, Some(col)).unwrap_or(col);
             c.push_str(&format!("{}{}{} w 1 J 1 j\n{}", rg_stroke(col), rg(fill), n(w), dash(d)));
             c.push_str(&format!("{} {} m {} {} l S\n[] 0 d\n", n(l[0]), n(l[1]), n(l[2]), n(l[3])));
+            c.push_str(&extension_lines(d, &l));
             for (end, (tip, from)) in ends.iter().zip([((l[0], l[1]), (l[2], l[3])), ((l[2], l[3]), (l[0], l[1]))]) {
                 if !line_end(&mut c, end, tip, from, w) {
                     return None;
@@ -762,10 +785,23 @@ pub fn build(d: &Dict) -> Option<Stream> {
         let value = value.to_text();
         if value.chars().count() <= 256 && matches!(subtype.as_slice(), b"Line" | b"PolyLine" | b"Polygon") {
             let size = 10.0;
-            let x = (rect[0] + rect[2] - text_width(&value, size)) * 0.5;
-            let y = rect[3] - 12.0;
             let col = stroke.unwrap_or([0.0, 0.47, 0.84]);
-            out.extend(format!("{}BT /Helv {} Tf {} {} Td ", rg(col), n(size), n(x), n(y)).bytes());
+            // A distance's caption runs along its line, centred and just above it, upright to read.
+            let along = nums(d, b"L").filter(|l| subtype == b"Line" && l.len() == 4).and_then(|l| {
+                let (dx, dy) = (l[2] - l[0], l[3] - l[1]);
+                let len = dx.hypot(dy);
+                let flip = if dx < -1e-9 || (dx.abs() <= 1e-9 && dy < 0.0) { -1.0 } else { 1.0 };
+                (len.is_finite() && len > 1e-9).then(|| (dx / len * flip, dy / len * flip, (l[0] + l[2]) * 0.5, (l[1] + l[3]) * 0.5))
+            });
+            let tw = text_width(&value, size);
+            let placement = match along {
+                Some((ux, uy, mx, my)) => {
+                    let (x, y) = (mx - ux * tw * 0.5 - uy * 3.0, my - uy * tw * 0.5 + ux * 3.0);
+                    format!("{} {} {} {} {} {} Tm ", n(ux), n(uy), n(-uy), n(ux), n(x), n(y))
+                }
+                None => format!("{} {} Td ", n((rect[0] + rect[2] - tw) * 0.5), n(rect[3] - 12.0)),
+            };
+            out.extend(format!("{}BT /Helv {} Tf {}", rg(col), n(size), placement).bytes());
             // WinAnsi bytes (e.g. 0xB2 for "²") go into the stream as-is, not through UTF-8.
             out.extend(literal(&win_ansi(&value)));
             out.extend_from_slice(b" Tj ET\n");

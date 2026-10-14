@@ -4701,6 +4701,12 @@ fn measurements_calibrate_draw_save_reopen_and_export() {
     let last = all["measurements"].as_array().unwrap().last().unwrap();
     assert!((last["reading"]["value"].as_f64().unwrap() - 10.0).abs() < 1e-6);
     assert_eq!(last["points"], json!([[100.0, 100.0], [180.0, 160.0]]));
+    // An offset moves the dimension line sideways in page coordinates, perpendicular, keeping the value.
+    ok(&mut a, "measure_distance", json!({"doc":doc,"page":1,"points":[[100,100],[180,100]],"offset":30}));
+    let all = ok(&mut a, "measure_list", json!({"doc":doc}));
+    let last = all["measurements"].as_array().unwrap().last().unwrap();
+    assert!((last["reading"]["value"].as_f64().unwrap() - 8.0).abs() < 1e-6, "{last}");
+    assert_eq!(last["points"], json!([[100.0, 130.0], [180.0, 130.0]]));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -4713,6 +4719,8 @@ fn measurements_bad_arguments_leave_document_and_history_unchanged() {
     for (tool, args) in [
         ("measure_distance", json!({"doc":doc,"page":1,"points":[[0,0]]})),
         ("measure_distance", json!({"doc":doc,"page":1,"points":[[0,0],[0,0]]})),
+        ("measure_distance", json!({"doc":doc,"page":1,"points":[[0,0],[10,0]],"offset":1e12})),
+        ("measure_area", json!({"doc":doc,"page":1,"points":[[0,0],[20,0],[0,20]],"offset":5})),
         ("measure_area", json!({"doc":doc,"page":1,"points":[[0,0],[20,20],[0,20],[20,0]]})),
         ("measure_scale", json!({"doc":doc,"page":1,"points":[[0,0],[0,0]],"distance":10})),
         ("measure_snap", json!({"doc":doc,"page":1,"at":[1e100,0]})),

@@ -278,6 +278,28 @@ pub struct NewMeasurement {
     pub style: Style,
     pub label: String,
     pub author: String,
+    /// Distance only: how far the dimension line sits from the measured points, perpendicular to
+    /// them, in user-space units. Positive is to the left of the first-to-second direction; zero
+    /// puts the arrows and the text on the measured line itself.
+    pub offset: f64,
+}
+/// Largest accepted dimension-line offset, in user-space units.
+const MAX_OFFSET: f64 = 1e7;
+/// Gap left between the measured point and the start of its extension line, and how far the
+/// extension line runs past the dimension line, in points.
+const EXTENSION_GAP: f64 = 2.0;
+const EXTENSION_PAST: f64 = 3.0;
+/// Where an aligned dimension is drawn: the measured segment `a`-`b` moved sideways by `offset`
+/// (positive = left of a-to-b). `None` when `a` and `b` coincide or the result is not finite.
+pub fn dimension_line(a: Point, b: Point, offset: f64) -> Option<(Point, Point)> {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len = dx.hypot(dy);
+    if !(len.is_finite() && len > 1e-9 && offset.is_finite()) {
+        return None;
+    }
+    let (nx, ny) = (-dy / len * offset, dx / len * offset);
+    let out = ([a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny]);
+    [out.0, out.1].iter().flatten().all(|v| v.is_finite()).then_some(out)
 }
 /// An area's vertices without a repeated closing vertex (last == first), which some
 /// writers include; the closing edge is implicit.
@@ -339,13 +361,17 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     if new.label.len() > 512 || new.author.len() > 512 {
         return Err(invalid("measurement label and author must be at most 512 bytes"));
     }
+    if !new.offset.is_finite() || new.offset.abs() > MAX_OFFSET || (new.offset != 0.0 && new.kind != Kind::Distance) {
+        return Err(invalid("only a distance can have a dimension-line offset, within 1e7 units"));
+    }
+    let (first, last) = (new.points.first().copied(), new.points.last().copied());
+    let (from, to) = (first.ok_or_else(|| invalid("missing start"))?, last.ok_or_else(|| invalid("missing end"))?);
+    let (line_from, line_to) =
+        if new.offset == 0.0 { (from, to) } else { dimension_line(from, to, new.offset).ok_or_else(|| invalid("invalid dimension line"))? };
     let shape = match new.kind {
-        Kind::Distance => Shape::Line {
-            from: new.points.first().copied().ok_or_else(|| invalid("missing start"))?,
-            to: new.points.last().copied().ok_or_else(|| invalid("missing end"))?,
-            start: pdfcraft_annot::LineEnding::None,
-            end: pdfcraft_annot::LineEnding::OpenArrow,
-        },
+        Kind::Distance => {
+            Shape::Line { from: line_from, to: line_to, start: pdfcraft_annot::LineEnding::None, end: pdfcraft_annot::LineEnding::OpenArrow }
+        }
         Kind::Perimeter => {
             Shape::PolyLine { vertices: new.points.clone(), start: pdfcraft_annot::LineEnding::None, end: pdfcraft_annot::LineEnding::None }
         }
@@ -363,12 +389,42 @@ pub fn add(doc: &mut Document, new: &NewMeasurement, meta: &Meta) -> Result<usiz
     d.set(b"PCMeasureLabel".to_vec(), PdfString::text(&new.label));
     d.set(b"PCMeasureValue".to_vec(), PdfString::text(&info.label));
     if new.kind == Kind::Distance {
-        d.set(b"LE".to_vec(), Object::Array(vec![Object::name("OpenArrow"), Object::name("OpenArrow")]));
+        d.set(b"LE".to_vec(), Object::Array(vec![Object::name("ClosedArrow"), Object::name("ClosedArrow")]));
         d.set(b"Cap".to_vec(), Object::Bool(true));
         d.set(b"CP".to_vec(), Object::name("Top"));
+        if new.offset != 0.0 {
+            // Extension lines (§12.5.6.7): a positive /LL runs clockwise from the line, back to the measured points.
+            let gap = EXTENSION_GAP.min(new.offset.abs() / 2.0);
+            d.set(b"LL".to_vec(), Object::Real(new.offset));
+            d.set(b"LLO".to_vec(), Object::Real(gap));
+            d.set(b"LLE".to_vec(), Object::Real(EXTENSION_PAST));
+        }
     }
-    // Leave room for the readable numeric caption above the geometry.
-    if let Some(rect) = d.get(b"Rect").and_then(Object::as_array) {
+    // Leave room for the readable numeric caption around the geometry.
+    if new.kind == Kind::Distance {
+        let width = (info.label.len() as f64 * 6.0).max(40.0);
+        let (dx, dy) = (line_to[0] - line_from[0], line_to[1] - line_from[1]);
+        let len = dx.hypot(dy).max(1e-9);
+        let (ux, uy) = (dx / len, dy / len);
+        let mid = [(line_from[0] + line_to[0]) * 0.5, (line_from[1] + line_to[1]) * 0.5];
+        let mut xs = vec![line_from[0], line_to[0], from[0], to[0]];
+        let mut ys = vec![line_from[1], line_to[1], from[1], to[1]];
+        for (s, t) in [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)] {
+            xs.push(mid[0] + ux * width * 0.5 * s - uy * 16.0 * t);
+            ys.push(mid[1] + uy * width * 0.5 * s + ux * 16.0 * t);
+        }
+        let fold = |v: &[f64], f: fn(f64, f64) -> f64, init: f64| v.iter().copied().fold(init, f);
+        let pad = EXTENSION_PAST + 4.0;
+        d.set(
+            b"Rect".to_vec(),
+            nums([
+                fold(&xs, f64::min, f64::INFINITY) - pad,
+                fold(&ys, f64::min, f64::INFINITY) - pad,
+                fold(&xs, f64::max, f64::NEG_INFINITY) + pad,
+                fold(&ys, f64::max, f64::NEG_INFINITY) + pad,
+            ]),
+        );
+    } else if let Some(rect) = d.get(b"Rect").and_then(Object::as_array) {
         let values: Option<Vec<f64>> = rect.iter().map(Object::as_f64).collect();
         if let Some(v) = values.filter(|v| v.len() == 4) {
             let width = (info.label.len() as f64 * 6.0).max(40.0);

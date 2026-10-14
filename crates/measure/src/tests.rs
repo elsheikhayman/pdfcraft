@@ -26,6 +26,7 @@ fn new(kind: Kind, points: Vec<Point>) -> NewMeasurement {
         style: Style { color: [0.0, 0.47, 0.84], ..Style::default() },
         label: "Room 1".into(),
         author: "A".into(),
+        offset: 0.0,
     }
 }
 #[test]
@@ -383,4 +384,49 @@ fn blank_unit_labels_from_cad_exports_are_readable() {
     let scale = scale_at_or(&d, 0, [50.0, 50.0], 25.4 / 72.0, "mm").unwrap();
     assert_eq!((scale.unit.as_str(), scale.area_unit.as_str()), ("mm", "mm"));
     close(scale.x, 0.5);
+}
+
+#[test]
+fn an_offset_distance_is_drawn_as_a_dimension_with_extension_lines_and_aligned_caption() {
+    let mut doc = fixture("", "", &[]);
+    let mut m = new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]);
+    m.offset = 20.0;
+    let index = add(&mut doc, &m, &Meta::default()).unwrap();
+    let listing = list(&doc);
+    let saved = listing.measurements.first().unwrap();
+    // The line is the dimension line (the measured segment moved left by 20), the value is unchanged.
+    close(saved.reading.value, 100.0);
+    let (da, db) = dimension_line([0.0, 0.0], [30.0, 40.0], 20.0).unwrap();
+    close(da[0], -16.0);
+    close(da[1], 12.0);
+    assert_eq!(saved.points, vec![da, db]);
+    let (_, dict) = annot(&doc, 0, index).unwrap();
+    close(dict.get(b"LL").and_then(Object::as_f64).unwrap(), 20.0);
+    let rect: Vec<f64> = dict.get(b"Rect").and_then(Object::as_array).unwrap().iter().filter_map(Object::as_f64).collect();
+    for p in [[0.0, 0.0], [30.0, 40.0], da, db] {
+        assert!(rect[0] <= p[0] && p[0] <= rect[2] && rect[1] <= p[1] && p[1] <= rect[3], "{p:?} outside {rect:?}");
+    }
+    let ap = pdfcraft_annot::appearance::build(&dict).expect("appearance");
+    let content = String::from_utf8_lossy(&ap.decoded().unwrap()).into_owned();
+    assert_eq!(content.matches(" l S").count(), 3, "dimension line and two extension lines: {content}");
+    assert!(content.contains(" Tm "), "the caption follows the line: {content}");
+    // Reversing the offset sign mirrors the dimension to the other side.
+    let mut right = new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]);
+    right.offset = -20.0;
+    let i2 = add(&mut doc, &right, &Meta::default()).unwrap();
+    let (_, annot2) = annot(&doc, 0, i2).unwrap();
+    close(annot2.get(b"LL").and_then(Object::as_f64).unwrap(), -20.0);
+}
+#[test]
+fn offsets_are_refused_when_not_finite_huge_or_not_on_a_distance() {
+    let mut doc = fixture("", "", &[]);
+    for offset in [f64::NAN, f64::INFINITY, 1e9] {
+        let mut m = new(Kind::Distance, vec![[0.0, 0.0], [30.0, 40.0]]);
+        m.offset = offset;
+        assert!(add(&mut doc, &m, &Meta::default()).is_err(), "{offset}");
+    }
+    let mut m = new(Kind::Perimeter, vec![[0.0, 0.0], [30.0, 40.0]]);
+    m.offset = 5.0;
+    assert!(add(&mut doc, &m, &Meta::default()).is_err());
+    assert!(dimension_line([1.0, 1.0], [1.0, 1.0], 5.0).is_none());
 }

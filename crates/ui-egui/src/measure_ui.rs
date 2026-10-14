@@ -160,13 +160,19 @@ pub(crate) fn page_input(
     let mut hover = None;
     let mut snap = None;
     let mut constrained = false;
+    // Distance, second point set: the pointer now places the dimension line, arrows and text.
+    let placing = tool == Tool::Distance && state.page == Some(page) && state.points.len() == 2;
+    let mut offset = None;
     if let Some(pos) = pos {
         // The crosshair is drawn below, so the system cursor would only double it.
         ui.ctx().set_cursor_icon(egui::CursorIcon::None);
         let (vx, vy) = xf.screen_to_view(pos);
         let [x, y] = info.view_to_user(vx, vy);
         let mut point = [f64::from(x), f64::from(y)];
-        if state.snap_enabled {
+        if placing && let [a, b] = state.points.as_slice() {
+            offset = Some(placement_offset(*a, *b, point));
+        }
+        if state.snap_enabled && !placing {
             if state.paths.as_ref().is_none_or(|(p, g, _)| *p != page || *g != doc.edit_generation()) {
                 state.paths = Some((page, doc.edit_generation(), doc.measurement_paths(page)));
             }
@@ -195,13 +201,16 @@ pub(crate) fn page_input(
         }
         let shift = ui.input(|i| i.modifiers.shift);
         if (shift || state.ortho)
+            && !placing
             && let Some(last) = state.points.last()
         {
             point = if shift { measure::snap::constrain(*last, point) } else { measure::snap::constrain_ortho(*last, point) };
             constrained = true;
         }
-        hover = Some(point);
-        if resp.clicked() {
+        hover = (!placing).then_some(point);
+        if resp.clicked() && placing {
+            finish(state, &mut view.pending_edit, doc, page, tool, author, offset.unwrap_or(0.0));
+        } else if resp.clicked() {
             if state.page != Some(page) {
                 state.cancel();
                 state.page = Some(page);
@@ -224,9 +233,9 @@ pub(crate) fn page_input(
             if !closes && !repeats && state.points.len() < measure::MAX_POINTS {
                 state.points.push(point);
             }
-            let finishes = closes || matches!(tool, Tool::Distance | Tool::Calibrate) && state.points.len() == 2;
+            let finishes = closes || tool == Tool::Calibrate && state.points.len() == 2;
             if finishes {
-                finish(state, &mut view.pending_edit, doc, page, tool, author);
+                finish(state, &mut view.pending_edit, doc, page, tool, author, 0.0);
             }
         }
     }
@@ -235,7 +244,7 @@ pub(crate) fn page_input(
     let mut drawing = state.page == Some(page) && !state.points.is_empty();
     if drawing {
         if (resp.double_clicked() || !typing && ui.input(|i| i.key_pressed(egui::Key::Enter))) && matches!(tool, Tool::Perimeter | Tool::Area) {
-            finish(state, &mut view.pending_edit, doc, page, tool, author);
+            finish(state, &mut view.pending_edit, doc, page, tool, author, 0.0);
         }
         if !typing && ui.input(|i| i.key_pressed(egui::Key::Backspace)) {
             state.points.pop();
@@ -280,8 +289,11 @@ pub(crate) fn page_input(
             ui.painter().rect_filled(r, 0.0, accent);
             ui.painter().rect_stroke(r, 0.0, Stroke::new(1.5, Color32::WHITE), egui::StrokeKind::Outside);
         }
+        if placing && let (Some(off), Some(reading), [a, b]) = (offset, &state.reading, state.points.as_slice()) {
+            dimension_preview(ui, *a, *b, off, &screen, &reading.label, accent);
+        }
         // Per-segment lengths, centred on each segment.
-        if let Some(scale) = &state.scale {
+        if let Some(scale) = state.scale.as_ref().filter(|_| !placing) {
             let skip = points.len().saturating_sub(65);
             for (i, w) in points.windows(2).enumerate().skip(skip) {
                 let (Some(a), Some(b)) = (w.first(), w.get(1)) else { continue };
@@ -343,6 +355,54 @@ pub(crate) fn page_input(
         chip(ui, egui::pos2(clip.left() + 8.0, clip.bottom() - 8.0), egui::Align2::LEFT_BOTTOM, &status, false, tokens.text_muted, tokens.card);
     }
 }
+/// How far from the line `a`-`b` the pointer at `p` places the dimension line (positive = left of
+/// a-to-b, as `measure::dimension_line` expects).
+fn placement_offset(a: Point, b: Point, p: Point) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len = dx.hypot(dy);
+    if !(len.is_finite() && len > 1e-9) {
+        return 0.0;
+    }
+    let mid = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+    let offset = ((p[0] - mid[0]) * -dy + (p[1] - mid[1]) * dx) / len;
+    if offset.is_finite() { offset } else { 0.0 }
+}
+/// The dimension as it will be saved: extension lines, the dimension line with filled arrows at
+/// both ends, and the value above it, turned to follow the line and kept upright.
+fn dimension_preview(ui: &egui::Ui, a: Point, b: Point, offset: f64, screen: &dyn Fn(Point) -> Pos2, label: &str, accent: Color32) {
+    let Some((da, db)) = measure::dimension_line(a, b, offset) else { return };
+    let (sa, sb, sda, sdb) = (screen(a), screen(b), screen(da), screen(db));
+    let axis = sdb - sda;
+    if axis.length() < 1.0 {
+        return;
+    }
+    let dir = axis.normalized();
+    // Extension lines stop short of the measured points and run a little past the dimension line.
+    if (sda - sa).length() > 4.0 {
+        let out = (sda - sa).normalized();
+        let lines = [(vec![sa + out * 3.0, sda + out * 4.0], false), (vec![sb + out * 3.0, sdb + out * 4.0], false)];
+        halo_lines(ui, &lines, accent, 1.0);
+    }
+    halo_lines(ui, &[(vec![sda, sdb], false)], accent, 1.5);
+    // Filled arrows, tip on each extension line, pointing outwards along the dimension line.
+    let arrow = (axis.length() * 0.3).min(12.0);
+    let side = egui::vec2(-dir.y, dir.x) * (arrow * 0.18);
+    for (tip, inward) in [(sda, dir), (sdb, -dir)] {
+        let base = tip + inward * arrow;
+        ui.painter().add(egui::Shape::convex_polygon(vec![tip, base + side, base - side], accent, Stroke::new(1.0, Color32::from_black_alpha(190))));
+    }
+    let up_dir = if dir.x < 0.0 || (dir.x == 0.0 && dir.y > 0.0) { -dir } else { dir };
+    let up = egui::vec2(up_dir.y, -up_dir.x);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), crate::theme::semibold(12.5), Color32::WHITE);
+    let size = galley.size();
+    let mid = sda + axis * 0.5;
+    let origin = mid - up_dir * (size.x * 0.5) + up * (size.y + 4.0);
+    let angle = up_dir.y.atan2(up_dir.x);
+    let pad = up_dir * 4.0;
+    let backdrop = [origin - pad, origin + up_dir * size.x + pad, origin + up_dir * size.x - up * size.y + pad, origin - up * size.y - pad];
+    ui.painter().add(egui::Shape::convex_polygon(backdrop.to_vec(), Color32::from_black_alpha(190), Stroke::NONE));
+    ui.painter().add(egui::epaint::TextShape::new(origin, galley, accent).with_angle(angle).with_override_text_color(Color32::WHITE));
+}
 /// Half-length of each crosshair arm in screen points.
 const CROSSHAIR_ARM: f32 = 90.0;
 /// AutoCAD-style crosshair: long thin arms with a halo, readable on light, dark and busy pages.
@@ -395,7 +455,7 @@ fn chip(ui: &egui::Ui, anchor: Pos2, align: egui::Align2, text: &str, bold: bool
     ui.painter().rect_stroke(rect, 3.0, Stroke::new(1.0, fg.gamma_multiply(0.45)), egui::StrokeKind::Inside);
     ui.painter().galley(rect.min + pad, galley, fg);
 }
-fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, page: usize, tool: Tool, author: &str) {
+fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, page: usize, tool: Tool, author: &str, offset: f64) {
     if tool == Tool::Calibrate {
         if let [a, b] = state.points.as_slice() {
             let a = doc.measurement_to_view(page, *a);
@@ -426,6 +486,7 @@ fn finish(state: &mut MeasureView, pending: &mut Option<Edit>, doc: &Document, p
             style: Style { color: [0.0, 0.47, 0.84], ..Style::default() },
             label: state.label.clone(),
             author: author.into(),
+            offset,
         }));
         state.cancel();
     }

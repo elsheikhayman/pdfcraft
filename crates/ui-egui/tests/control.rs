@@ -1201,13 +1201,17 @@ fn measurement_tools_draw_live_calibrate_save_and_export() {
         h.run_steps(2);
     };
     for (command, points) in [
-        ("measure.distance", vec![(20.0, 30.0), (80.0, 110.0)]),
+        ("measure.distance", vec![(20.0, 30.0), (80.0, 110.0), (30.0, 100.0)]),
         ("measure.perimeter", vec![(20.0, 130.0), (80.0, 130.0), (80.0, 210.0)]),
         ("measure.area", vec![(100.0, 130.0), (160.0, 130.0), (160.0, 210.0), (100.0, 210.0)]),
     ] {
         ok(&mut h, &c, "ui.command", json!({"id":command}));
-        for (x, y) in points {
+        for (i, (x, y)) in points.into_iter().enumerate() {
             click(&mut h, &c, x, y);
+            if command == "measure.distance" && i == 1 {
+                // After the second point the pointer places the dimension: nothing is saved yet.
+                assert!(h.state().session.get(doc).unwrap().measurements().unwrap().measurements.is_empty());
+            }
         }
         if command != "measure.distance" {
             ok(&mut h, &c, "ui.key", json!({"key":"Enter"}));
@@ -1219,6 +1223,9 @@ fn measurement_tools_draw_live_calibrate_save_and_export() {
     for (m, value) in measurements.iter().zip([10.0, 14.0, 48.0]) {
         assert!((m.reading.value - value).abs() < 0.01, "{m:?}");
     }
+    // The distance was placed off its measured points: its line is the dimension line, 10 m long.
+    let moved = measurements[0].points.clone();
+    assert!(moved[0] != [20.0, 30.0] || moved[1] != [80.0, 110.0], "{moved:?}");
     ok(&mut h, &c, "ui.command", json!({"id":"edit.undo"}));
     h.run_steps(2);
     assert_eq!(h.state().session.get(doc).unwrap().measurements().unwrap().measurements.len(), 2);

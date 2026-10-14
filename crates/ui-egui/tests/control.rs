@@ -1233,7 +1233,18 @@ fn measurement_tools_draw_live_calibrate_save_and_export() {
     h.state_mut().set_option("quick", "measure-calibrate").unwrap();
     click(&mut h, &c, 30.0, 50.0);
     click(&mut h, &c, 130.0, 50.0);
-    assert!((h.state().views[0].measure.drawing_points - 100.0).abs() < 0.01);
+    h.run_steps(2);
+    // Two clicked points open the calibration dialog; the entered real length becomes the scale.
+    let cal = h.state_mut().views[0].measure.calibration.as_mut().unwrap();
+    assert!((cal.measured - 100.0).abs() < 0.01);
+    cal.text = "5".into();
+    cal.unit = "m".into();
+    h.run_steps(2);
+    h.get_by_label("Set scale").click();
+    h.run_steps(3);
+    assert!(h.state().views[0].measure.calibration.is_none());
+    let scale = h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap();
+    assert!((scale.x - 0.05).abs() < 1e-6, "{scale:?}");
     let _ = std::fs::remove_dir_all(dir);
 }
 

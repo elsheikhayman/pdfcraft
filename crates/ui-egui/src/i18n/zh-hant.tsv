@@ -2384,7 +2384,15 @@ animation effects	Off	關
 	Make properties default	將內容設為預設
 	Pages selected	選取的頁面
 	Page properties	頁面屬性
+	Calibrate scale	校準比例
+	Enter a length greater than zero.	請輸入大於零的長度。
+	Length	長度
+	Measured on the drawing	圖面上量得
 	Ortho	正交
+	Pick two different points.	請選擇兩個不同的點。
+	Ratio	比例
+	Set scale	設定比例
 	Snap	鎖點
+	What is the real length between these two points?	這兩點之間的實際長度是多少？
 	off	關
 	on	開

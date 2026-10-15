@@ -25,6 +25,7 @@ fn dialogs(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if app.dialog != Some(Dialog::WordCount) {
         app.word_count_draft.cancel();
     }
+    crate::measure_ui::calibrate_dialog(app, ctx);
     let Some(dialog) = app.dialog else {
         app.props_draft = None;
         app.view_draft = None;

@@ -2426,7 +2426,15 @@ animation effects	Off	Өшірулі
 	Make properties default	Қасиеттерді әдепкі ету
 	Pages selected	Таңдалған беттер
 	Page properties	Бет қасиеттері
+	Calibrate scale	Масштабты калибрлеу
+	Enter a length greater than zero.	Нөлден үлкен ұзындықты енгізіңіз.
+	Length	Ұзындық
+	Measured on the drawing	Сызбада өлшенгені
 	Ortho	Орто
+	Pick two different points.	Екі түрлі нүктені таңдаңыз.
+	Ratio	Қатынас
+	Set scale	Масштабты орнату
 	Snap	Тіркеу
+	What is the real length between these two points?	Осы екі нүктенің арасындағы нақты ұзындық қанша?
 	off	өшірулі
 	on	қосулы

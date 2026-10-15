@@ -2429,7 +2429,15 @@ animation effects	Off	Aus
 	Make properties default	Eigenschaften als Standard festlegen
 	Pages selected	Ausgewählte Seiten
 	Page properties	Seiteneigenschaften
+	Calibrate scale	Maßstab kalibrieren
+	Enter a length greater than zero.	Gib eine Länge größer als null ein.
+	Length	Länge
+	Measured on the drawing	Auf der Zeichnung gemessen
 	Ortho	Ortho
+	Pick two different points.	Wähle zwei verschiedene Punkte.
+	Ratio	Verhältnis
+	Set scale	Maßstab festlegen
 	Snap	Einrasten
+	What is the real length between these two points?	Wie lang ist die tatsächliche Strecke zwischen diesen beiden Punkten?
 	off	aus
 	on	ein

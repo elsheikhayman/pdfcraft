@@ -2640,7 +2640,15 @@ certificate	Key usage	Utilizzo chiave
 certificate	Self-signed	Autofirmato
 certificate	SHA-1 digest	Impronta SHA-1
 certificate	SHA-256 digest	Impronta SHA-256
+	Calibrate scale	Calibra scala
+	Enter a length greater than zero.	Inserisci una lunghezza maggiore di zero.
+	Length	Lunghezza
+	Measured on the drawing	Misurato sul disegno
 	Ortho	Orto
+	Pick two different points.	Scegli due punti diversi.
+	Ratio	Rapporto
+	Set scale	Imposta scala
 	Snap	Snap
+	What is the real length between these two points?	Qual è la lunghezza reale tra questi due punti?
 	off	disattivo
 	on	attivo

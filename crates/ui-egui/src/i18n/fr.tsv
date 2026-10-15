@@ -2428,7 +2428,15 @@ animation effects	Off	Désactivés
 	Make properties default	Définir comme propriétés par défaut
 	Pages selected	Pages sélectionnées
 	Page properties	Propriétés de la page
+	Calibrate scale	Calibrer l’échelle
+	Enter a length greater than zero.	Saisissez une longueur supérieure à zéro.
+	Length	Longueur
+	Measured on the drawing	Mesuré sur le dessin
 	Ortho	Ortho
+	Pick two different points.	Choisissez deux points différents.
+	Ratio	Rapport
+	Set scale	Définir l’échelle
 	Snap	Accrochage
+	What is the real length between these two points?	Quelle est la longueur réelle entre ces deux points ?
 	off	désactivé
 	on	activé

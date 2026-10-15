@@ -2672,7 +2672,15 @@ key	Space	Tarpas
 	Make properties default	Nustatyti ypatybes kaip numatytąsias
 	Pages selected	Pasirinkti puslapiai
 	Page properties	Puslapio ypatybės
+	Calibrate scale	Kalibruoti mastelį
+	Enter a length greater than zero.	Įveskite už nulį didesnį ilgį.
+	Length	Ilgis
+	Measured on the drawing	Išmatuota brėžinyje
 	Ortho	Orto
+	Pick two different points.	Pasirinkite du skirtingus taškus.
+	Ratio	Santykis
+	Set scale	Nustatyti mastelį
 	Snap	Prisikabinimas
+	What is the real length between these two points?	Koks tikrasis atstumas tarp šių dviejų taškų?
 	off	išjungta
 	on	įjungta

@@ -2706,7 +2706,15 @@ certificate	Version	الإصدار
 	Make properties default	جعل الخصائص افتراضية
 	Pages selected	الصفحات المحددة
 	Page properties	خصائص الصفحة
+	Calibrate scale	معايرة المقياس
+	Enter a length greater than zero.	أدخل طولًا أكبر من الصفر.
+	Length	الطول
+	Measured on the drawing	المقاس على الرسم
 	Ortho	متعامد
+	Pick two different points.	اختر نقطتين مختلفتين.
+	Ratio	النسبة
+	Set scale	تعيين المقياس
 	Snap	الانجذاب
+	What is the real length between these two points?	ما الطول الحقيقي بين هاتين النقطتين؟
 	off	إيقاف
 	on	تشغيل

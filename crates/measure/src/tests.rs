@@ -365,6 +365,14 @@ fn user_unit_is_read_as_acrobat_reads_it() {
 }
 
 #[test]
+fn ortho_locks_to_the_dominant_axis() {
+    use crate::snap::constrain_ortho;
+    assert_eq!(constrain_ortho([0.0, 0.0], [10.0, 3.0]), [10.0, 0.0]);
+    assert_eq!(constrain_ortho([0.0, 0.0], [-2.0, 7.0]), [0.0, 7.0]);
+    assert_eq!(constrain_ortho([5.0, 5.0], [5.0, 5.0]), [5.0, 5.0]);
+}
+
+#[test]
 fn blank_unit_labels_from_cad_exports_are_readable() {
     let measure = "<< /Type /Measure /Subtype /RL /R ( ) /X [<< /C 0.5 /U ( ) >>] /D [<< /C 1 /U ( ) >>] /A [<< /C 1 /U ( ) >>] >>";
     let viewport = format!("<< /Type /Viewport /BBox [0 0 100 100] /Measure {measure} >>");

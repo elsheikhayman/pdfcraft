@@ -65,8 +65,6 @@ pub struct MeasureView {
     pub paper_unit: Unit,
     pub real_distance: f64,
     pub calibration: Option<Calibration>,
-    /// A scale field changed and is not stored in the page yet; applied once the field is released.
-    scale_dirty: bool,
     pub unit: String,
     pub precision: u8,
     /// A scale field changed and is not stored in the page yet; stored once the field is released.
@@ -99,7 +97,6 @@ impl Default for MeasureView {
             paper_unit: Unit::Millimetres,
             real_distance: 1.0,
             calibration: None,
-            scale_dirty: false,
             unit: "in".into(),
             precision: 2,
             scale_dirty: false,
@@ -772,5 +769,24 @@ fn export_csv(app: &mut PdfCraftApp) {
                 app.notify(&e);
             }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_ratio_hint_compares_page_and_real_lengths_and_is_silent_for_custom_units() {
+        // 1 mm on the page (72 / 25.4 points) standing for 10 cm is a ratio of 1 : 100.
+        let mm = 72.0 / 25.4;
+        assert_eq!(ratio_text(mm, 10.0, "cm").as_deref(), Some("Ratio 1 : 100"));
+        assert_eq!(ratio_text(mm, 1.0, "mm").as_deref(), Some("Ratio 1 : 1"));
+        // A bigger page than the real thing reads the other way round.
+        assert_eq!(ratio_text(mm * 5.0, 1.0, "mm").as_deref(), Some("Ratio 5 : 1"));
+        assert_eq!(ratio_text(mm, 3.0, "parsec"), None);
+        assert_eq!(ratio_text(0.0, 3.0, "m"), None);
+        assert_eq!(ratio_text(mm, f64::NAN, "m"), None);
+        assert_eq!(trim(2.5), "2.5");
+        assert_eq!(trim(100.0), "100");
     }
 }

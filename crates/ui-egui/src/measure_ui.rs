@@ -142,12 +142,13 @@ pub(crate) fn page_input(
         let v = info.user_to_view(p[0] as f32, p[1] as f32);
         xf.norm_to_screen(v[0] / xf.pw, v[1] / xf.ph)
     };
-    let pos = ui.input(|i| i.pointer.hover_pos()).filter(|p| xf.rect.contains(*p));
+    let pos = ui.input(|i| i.pointer.hover_pos()).filter(|p| xf.rect.contains(*p) && resp.hovered());
     let mut hover = None;
     let mut snap = None;
     let mut constrained = false;
     if let Some(pos) = pos {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        // The crosshair is drawn below, so the system cursor would only double it.
+        ui.ctx().set_cursor_icon(egui::CursorIcon::None);
         let (vx, vy) = xf.screen_to_view(pos);
         let [x, y] = info.view_to_user(vx, vy);
         let mut point = [f64::from(x), f64::from(y)];
@@ -310,6 +311,7 @@ pub(crate) fn page_input(
         }
     }
     if let Some(pos) = pos {
+        crosshair(&ui.painter().with_clip_rect(xf.rect.intersect(ui.clip_rect())), pos);
         if let (Some(p), Some(kind)) = (hover, snap) {
             snap_glyph(ui, screen(p), kind);
             chip(ui, screen(p) + egui::vec2(12.0, -12.0), egui::Align2::LEFT_BOTTOM, snap_name(kind), false, tokens.text, tokens.card);
@@ -325,6 +327,20 @@ pub(crate) fn page_input(
         let on = |b: bool| if b { tl!("on") } else { tl!("off") };
         let status = format!("{} F3 {}   {} F8 {}   Shift 45°", tl!("Snap"), on(state.snap_enabled), tl!("Ortho"), on(state.ortho));
         chip(ui, egui::pos2(clip.left() + 8.0, clip.bottom() - 8.0), egui::Align2::LEFT_BOTTOM, &status, false, tokens.text_muted, tokens.card);
+    }
+}
+/// Half-length of each crosshair arm in screen points.
+const CROSSHAIR_ARM: f32 = 90.0;
+/// AutoCAD-style crosshair: long thin arms with a halo, readable on light, dark and busy pages.
+fn crosshair(painter: &egui::Painter, c: Pos2) {
+    let arms = [
+        [c - egui::vec2(CROSSHAIR_ARM, 0.0), c + egui::vec2(CROSSHAIR_ARM, 0.0)],
+        [c - egui::vec2(0.0, CROSSHAIR_ARM), c + egui::vec2(0.0, CROSSHAIR_ARM)],
+    ];
+    for stroke in [Stroke::new(3.0, Color32::from_black_alpha(110)), Stroke::new(1.0, Color32::WHITE)] {
+        for arm in arms {
+            painter.line_segment(arm, stroke);
+        }
     }
 }
 fn snap_name(kind: measure::snap::SnapKind) -> &'static str {

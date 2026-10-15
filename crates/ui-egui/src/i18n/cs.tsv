@@ -2428,7 +2428,15 @@ animation effects	Off	Vypnuto
 	This document is trying to open a local file:	Tento dokument se pokouší otevřít místní soubor:
 	Move tag earlier	Přesunout značku dříve
 	Move tag later	Přesunout značku později
+	Calibrate scale	Kalibrace měřítka
+	Enter a length greater than zero.	Zadejte délku větší než nula.
+	Length	Délka
+	Measured on the drawing	Naměřeno na výkresu
 	Ortho	Orto
+	Pick two different points.	Vyberte dva různé body.
+	Ratio	Poměr
+	Set scale	Nastavit měřítko
 	Snap	Úchop
+	What is the real length between these two points?	Jaká je skutečná délka mezi těmito dvěma body?
 	off	vyp.
 	on	zap.

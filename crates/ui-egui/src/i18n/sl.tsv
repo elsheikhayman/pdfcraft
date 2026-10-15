@@ -2359,7 +2359,15 @@ animation effects	Off	Izklopljeni
 	This document is trying to open a local file:	Ta dokument poskuša odpreti lokalno datoteko:
 	Move tag earlier	Premakni oznako prej
 	Move tag later	Premakni oznako pozneje
+	Calibrate scale	Umeri merilo
+	Enter a length greater than zero.	Vnesite dolžino, večjo od nič.
+	Length	Dolžina
+	Measured on the drawing	Izmerjeno na risbi
 	Ortho	Orto
+	Pick two different points.	Izberite dve različni točki.
+	Ratio	Razmerje
+	Set scale	Nastavi merilo
 	Snap	Prilepljanje
+	What is the real length between these two points?	Kolikšna je dejanska dolžina med tema dvema točkama?
 	off	izklj.
 	on	vklj.

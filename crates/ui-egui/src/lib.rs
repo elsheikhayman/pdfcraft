@@ -1828,6 +1828,7 @@ impl PdfCraftApp {
             || self.pending_link.is_some()
             || self.pending_remote_link.is_some()
             || self.updates.open
+            || self.active_ids().is_some_and(|(i, _)| self.views.get(i).is_some_and(|v| v.measure.calibration.is_some()))
     }
 
     /// Enable the UI control channel on `ctx` (opt-in; see [`control`]). Returns a client that

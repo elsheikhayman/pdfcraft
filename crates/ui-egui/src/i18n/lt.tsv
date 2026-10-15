@@ -2598,7 +2598,15 @@ key	Space	Tarpas
 	This document is trying to open a local file:	Šis dokumentas bando atverti vietinį failą:
 	Move tag earlier	Perkelti žymą anksčiau
 	Move tag later	Perkelti žymą vėliau
+	Calibrate scale	Kalibruoti mastelį
+	Enter a length greater than zero.	Įveskite už nulį didesnį ilgį.
+	Length	Ilgis
+	Measured on the drawing	Išmatuota brėžinyje
 	Ortho	Orto
+	Pick two different points.	Pasirinkite du skirtingus taškus.
+	Ratio	Santykis
+	Set scale	Nustatyti mastelį
 	Snap	Prisikabinimas
+	What is the real length between these two points?	Koks tikrasis atstumas tarp šių dviejų taškų?
 	off	išjungta
 	on	įjungta

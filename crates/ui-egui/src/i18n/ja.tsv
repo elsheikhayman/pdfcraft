@@ -2354,7 +2354,15 @@ animation effects	Off	オフ
 	This document is trying to open a local file:	この文書はローカルファイルを開こうとしています：
 	Move tag earlier	タグを前へ移動
 	Move tag later	タグを後へ移動
+	Calibrate scale	縮尺の校正
+	Enter a length greater than zero.	0より大きい長さを入力してください。
+	Length	長さ
+	Measured on the drawing	図面上の測定値
 	Ortho	直交
+	Pick two different points.	異なる2点を選んでください。
+	Ratio	比率
+	Set scale	縮尺を設定
 	Snap	スナップ
+	What is the real length between these two points?	この2点間の実際の長さはいくつですか？
 	off	オフ
 	on	オン

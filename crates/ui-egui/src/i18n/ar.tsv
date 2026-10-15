@@ -2375,7 +2375,15 @@ animation effects	Off	معطّلة
 	This document is trying to open a local file:	يحاول هذا المستند فتح ملف محلي:
 	Move tag earlier	نقل العلامة للأعلى
 	Move tag later	نقل العلامة للأسفل
+	Calibrate scale	معايرة المقياس
+	Enter a length greater than zero.	أدخل طولًا أكبر من الصفر.
+	Length	الطول
+	Measured on the drawing	المقاس على الرسم
 	Ortho	متعامد
+	Pick two different points.	اختر نقطتين مختلفتين.
+	Ratio	النسبة
+	Set scale	تعيين المقياس
 	Snap	الانجذاب
+	What is the real length between these two points?	ما الطول الحقيقي بين هاتين النقطتين؟
 	off	إيقاف
 	on	تشغيل

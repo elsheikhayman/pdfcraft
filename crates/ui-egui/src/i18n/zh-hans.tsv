@@ -2318,7 +2318,15 @@ animation effects	Off	关
 	This document is trying to open a local file:	此文档正尝试打开本地文件：
 	Move tag earlier	将标签前移
 	Move tag later	将标签后移
+	Calibrate scale	校准比例
+	Enter a length greater than zero.	请输入大于零的长度。
+	Length	长度
+	Measured on the drawing	图纸上测得
 	Ortho	正交
+	Pick two different points.	请选择两个不同的点。
+	Ratio	比例
+	Set scale	设置比例
 	Snap	捕捉
+	What is the real length between these two points?	这两点之间的实际长度是多少？
 	off	关
 	on	开

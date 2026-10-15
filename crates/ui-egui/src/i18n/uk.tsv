@@ -2376,7 +2376,15 @@ animation effects	Off	Вимкнено
 	This document is trying to open a local file:	Цей документ намагається відкрити локальний файл:
 	Move tag earlier	Перемістити тег раніше
 	Move tag later	Перемістити тег пізніше
+	Calibrate scale	Калібрування масштабу
+	Enter a length greater than zero.	Введіть довжину, більшу за нуль.
+	Length	Довжина
+	Measured on the drawing	Виміряно на кресленні
 	Ortho	Орто
+	Pick two different points.	Виберіть дві різні точки.
+	Ratio	Співвідношення
+	Set scale	Задати масштаб
 	Snap	Прив’язка
+	What is the real length between these two points?	Яка реальна довжина між цими двома точками?
 	off	вимк.
 	on	увімк.

@@ -2363,7 +2363,15 @@ animation effects	Off	Disattivati
 	This document is trying to open a local file:	Questo documento sta tentando di aprire un file locale:
 	Move tag earlier	Sposta tag prima
 	Move tag later	Sposta tag dopo
+	Calibrate scale	Calibra scala
+	Enter a length greater than zero.	Inserisci una lunghezza maggiore di zero.
+	Length	Lunghezza
+	Measured on the drawing	Misurato sul disegno
 	Ortho	Orto
+	Pick two different points.	Scegli due punti diversi.
+	Ratio	Rapporto
+	Set scale	Imposta scala
 	Snap	Snap
+	What is the real length between these two points?	Qual è la lunghezza reale tra questi due punti?
 	off	disattivo
 	on	attivo

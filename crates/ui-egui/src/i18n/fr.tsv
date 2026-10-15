@@ -2354,3 +2354,7 @@ animation effects	Off	Désactivés
 	This document is trying to open a local file:	Ce document tente d’ouvrir un fichier local :
 	Move tag earlier	Déplacer la balise plus tôt
 	Move tag later	Déplacer la balise plus tard
+	Ortho	Ortho
+	Snap	Accrochage
+	off	désactivé
+	on	activé

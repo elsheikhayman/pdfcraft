@@ -189,6 +189,11 @@ pub fn constrain(last: Point, point: Point) -> Point {
     let angle = (v[1].atan2(v[0]) / std::f64::consts::FRAC_PI_4).round() * std::f64::consts::FRAC_PI_4;
     [last[0] + length * angle.cos(), last[1] + length * angle.sin()]
 }
+/// Lock a proposed vertex to the horizontal or vertical axis through the last vertex (ortho).
+pub fn constrain_ortho(last: Point, point: Point) -> Point {
+    let v = sub(point, last);
+    if v[0].abs() >= v[1].abs() { [point[0], last[1]] } else { [last[0], point[1]] }
+}
 struct Walker<'a> {
     doc: &'a Document,
     geometry: Geometry,

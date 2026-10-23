@@ -58,8 +58,9 @@ pub struct MeasureView {
     pub precision: u8,
     /// A scale field changed and is not stored in the page yet; stored once the field is released.
     scale_dirty: bool,
-    /// The fields describe the page's scale exactly (it was read, with equal X and Y factors),
-    /// so an edit to them may be stored without Apply; otherwise only Apply replaces it.
+    /// The fields describe the page's scale exactly (it was read, has equal X and Y factors and is
+    /// the page's only one), so an edit to them may be stored without Apply; otherwise only Apply
+    /// replaces it.
     auto_store: bool,
     pub name: String,
     pub whole_page: bool,
@@ -344,7 +345,9 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
             state.unit = scale.unit;
             state.page_unit = None;
             state.precision = scale.precision;
-            state.auto_store = (scale.x - scale.y).abs() <= 1e-9 * scale.x.abs().max(scale.y.abs());
+            // Storing writes a viewport over the page, so it must not hide another viewport.
+            state.auto_store =
+                (scale.x - scale.y).abs() <= 1e-9 * scale.x.abs().max(scale.y.abs()) && doc.measurement_scale_is_sole(page, a).unwrap_or(false);
         }
     }
     ui.label(tl!("Click vertices. Enter or double-click finishes a perimeter or area. Click the first point to close an area."));

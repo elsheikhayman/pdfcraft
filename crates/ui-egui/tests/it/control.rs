@@ -1980,3 +1980,27 @@ fn a_scale_the_fields_cannot_show_is_replaced_only_by_apply() {
     let replaced = stored(&h);
     assert_eq!(replaced.x, replaced.y);
 }
+
+#[test]
+fn a_field_edit_does_not_hide_a_second_viewport_on_the_page() {
+    use pdfcraft_engine::{Edit, measure::Scale};
+    let (mut h, c) = harness_pages(1);
+    let doc = h.state().views[0].id;
+    // A CAD sheet: one scale for the whole sheet, then a drawing at another scale inside it.
+    let sheet = Scale::new(2.0, "m", 2).unwrap();
+    let plan = Scale::new(50.0, "m", 2).unwrap();
+    h.state_mut().apply_edit(Edit::SetMeasurementScale { page: 0, bbox: [0.0, 0.0, 1000.0, 1000.0], name: "sheet".into(), scale: sheet });
+    h.state_mut().apply_edit(Edit::SetMeasurementScale { page: 0, bbox: [100.0, 100.0, 300.0, 300.0], name: "plan".into(), scale: plan.clone() });
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.scale"}));
+    h.run_steps(3);
+    let at_plan = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(doc).unwrap().measurement_scale(0, [150.0, 150.0]).unwrap();
+    assert_eq!(at_plan(&h), plan);
+    let field = measure_text_field(&h, "Drawing scale");
+    field.focus();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    field.type_text("Renamed");
+    h.run_steps(2);
+    h.get_by_label("Drawing scale").click();
+    h.run_steps(4);
+    assert_eq!(at_plan(&h), plan, "leaving a field does not lay a page-wide viewport over the drawing");
+}

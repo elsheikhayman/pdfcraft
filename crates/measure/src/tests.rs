@@ -495,3 +495,28 @@ fn a_blank_area_label_is_the_coordinate_unit_squared_after_save() {
     let stream = String::from_utf8_lossy(&stream.decoded().unwrap()).into_owned();
     assert!(stream.contains("(12.00 m^2) Tj"), "{stream}");
 }
+/// A scale panel may store a viewport over the page only when no other viewport would be hidden:
+/// the scale under the point is the only one the page shows.
+#[test]
+fn a_sole_scale_is_one_no_other_viewport_shows_beside() {
+    let vp = |bbox: &str| {
+        format!(
+            "<< /Type /Viewport /BBox [{bbox}] /Measure << /Type /Measure /Subtype /RL /R (1:1) /X [<< /C 1 /U (m) >>] /D [<< /C 1 /U (m) >>] /A [<< /C 1 /U (m^2) >>] >> >>"
+        )
+    };
+    let (page, plan) = (vp("0 0 612 792"), vp("100 100 300 300"));
+    let sole = |vps: &[&str], at: Point| {
+        let refs: Vec<String> = (0..vps.len()).map(|i| format!("{} 0 R", 6 + i)).collect();
+        let mut extra = vec!["[]"];
+        extra.extend_from_slice(vps);
+        sole_scale_at(&fixture("", &format!("/VP [{}]", refs.join(" ")), &extra), 0, at).unwrap()
+    };
+    assert!(sole_scale_at(&fixture("", "", &[]), 0, [50.0, 50.0]).unwrap(), "no viewports");
+    assert!(sole(&[&page], [50.0, 50.0]), "one viewport under the point");
+    assert!(!sole(&[&plan], [50.0, 50.0]), "the point is outside the page's one viewport");
+    assert!(sole(&[&plan, &page], [150.0, 150.0]), "a later viewport covers the earlier one");
+    // A CAD sheet: the whole sheet, then a drawing at 1:50 inside it. Both show.
+    assert!(!sole(&[&page, &plan], [50.0, 50.0]));
+    assert!(!sole(&[&page, &plan], [150.0, 150.0]));
+    assert!(sole_scale_at(&fixture("", "", &[]), 0, [f64::NAN, 0.0]).is_err());
+}

@@ -471,6 +471,27 @@ fn blank_unit_labels_from_cad_exports_are_readable() {
     close(scale.x, 0.5);
     assert_eq!(scale.unit, "in");
     let scale = scale_at_or(&d, 0, [50.0, 50.0], 25.4 / 72.0, "mm").unwrap();
-    assert_eq!((scale.unit.as_str(), scale.area_unit.as_str()), ("mm", "mm"));
+    assert_eq!((scale.unit.as_str(), scale.area_unit.as_str()), ("mm", "mm^2"));
     close(scale.x, 0.5);
+}
+/// A blank area label is the coordinate unit squared, not the linear display unit: with metres
+/// on both axes a 3-by-4 rectangle is 12 square metres, whatever unit the viewer displays.
+#[test]
+fn a_blank_area_label_is_the_coordinate_unit_squared_after_save() {
+    let measure = "<< /Type /Measure /Subtype /RL /R (1:1) /X [<< /C 1 /U (m) >>] /D [<< /C 1 /U (m) >>] /A [<< /C 1 /U () >>] >>";
+    let viewport = format!("<< /Type /Viewport /BBox [0 0 100 100] /Measure {measure} >>");
+    let mut d = fixture("", "/VP [6 0 R]", &["[]", &viewport]);
+    let mut m = new(Kind::Area, vec![[10.0, 10.0], [13.0, 10.0], [13.0, 14.0], [10.0, 14.0]]);
+    m.scale = scale_at_or(&d, 0, m.points[0], 25.4 / 72.0, "mm").unwrap();
+    assert_eq!(m.scale.area_unit, "m^2");
+    add(&mut d, &m, &Meta::default()).unwrap();
+    let d = Document::open(Arc::new(write_full(&d, &SaveOptions::default()).unwrap())).unwrap();
+    let listing = list(&d);
+    assert_eq!(listing.measurements[0].reading.label, "12.00 m^2");
+    let (_, dict) = annot(&d, 0, 0).unwrap();
+    let ap = d.resolve(dict.get(b"AP").unwrap());
+    let normal = d.resolve(ap.as_dict().unwrap().get(b"N").unwrap());
+    let Object::Stream(stream) = normal.as_ref() else { panic!("appearance missing") };
+    let stream = String::from_utf8_lossy(&stream.decoded().unwrap()).into_owned();
+    assert!(stream.contains("(12.00 m^2) Tj"), "{stream}");
 }

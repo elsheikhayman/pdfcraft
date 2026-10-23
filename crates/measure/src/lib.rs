@@ -217,7 +217,9 @@ impl Scale {
             return Err(invalid("different coordinate and distance units are not supported yet"));
         }
         let (area_unit, area_factor, _) = format(b"A")?;
-        let area_unit = named(area_unit);
+        // Areas convert from squared X units (ISO 32000-1 table 262), so a blank area label is
+        // the coordinate unit squared, never the linear display unit.
+        let area_unit = if area_unit.trim().is_empty() { format!("{unit}^2") } else { area_unit };
         let out = Self { x, y, unit, distance_factor, area_factor, area_unit, precision, ratio: text(d, b"R") };
         out.validate()?;
         Ok(out)

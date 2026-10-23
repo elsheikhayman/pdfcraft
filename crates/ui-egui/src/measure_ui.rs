@@ -58,6 +58,9 @@ pub struct MeasureView {
     pub precision: u8,
     /// A scale field changed and is not stored in the page yet; stored once the field is released.
     scale_dirty: bool,
+    /// The fields describe the page's scale exactly (it was read, with equal X and Y factors),
+    /// so an edit to them may be stored without Apply; otherwise only Apply replaces it.
+    auto_store: bool,
     pub name: String,
     pub whole_page: bool,
     pub rect: [f64; 4],
@@ -87,6 +90,7 @@ impl Default for MeasureView {
             page_unit: None,
             precision: 2,
             scale_dirty: false,
+            auto_store: false,
             name: "Drawing scale".into(),
             whole_page: true,
             rect: [0.0, 0.0, 100.0, 100.0],
@@ -318,8 +322,17 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
     if state.listing.as_ref().is_none_or(|(g, _)| *g != doc.edit_generation()) {
         state.listing = Some((doc.edit_generation(), doc.measurements()));
     }
+    let mut carried = None;
     if state.seeded_page != Some(page) {
+        // An edit not stored yet belongs to the page it was made on, not to the one now shown.
+        if std::mem::take(&mut state.scale_dirty)
+            && state.auto_store
+            && let Some(old) = state.seeded_page
+        {
+            carried = Some(scale_edit(doc, old, state, units));
+        }
         state.seeded_page = Some(page);
+        state.auto_store = false;
         // One page unit (the one the scale's unit gives) and what it measures.
         if let Ok(a) = doc.measurement_to_user(page, [0.0, 0.0])
             && let Ok(scale) = doc.measurement_scale_or(page, a, units.per_point(), units.label())
@@ -331,6 +344,7 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
             state.unit = scale.unit;
             state.page_unit = None;
             state.precision = scale.precision;
+            state.auto_store = (scale.x - scale.y).abs() <= 1e-9 * scale.x.abs().max(scale.y.abs());
         }
     }
     ui.label(tl!("Click vertices. Enter or double-click finishes a perimeter or area. Click the first point to close an area."));
@@ -412,7 +426,7 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
     });
     state.scale_dirty |= changed;
     let apply = ui.add_enabled(doc.allows_annotation(), egui::Button::new(tl!("Apply scale"))).clicked()
-        || (state.scale_dirty && !busy && doc.allows_annotation());
+        || (state.scale_dirty && state.auto_store && !busy && doc.allows_annotation());
     if let Some(error) = &state.error {
         ui.colored_label(Color32::from_rgb(190, 50, 50), error);
     }
@@ -441,12 +455,18 @@ fn panel_body(app: &mut PdfCraftApp, ui: &mut egui::Ui, _t: &Tokens) {
         }
     }
     let export = ui.button(tl!("Export measurements as CSV")).clicked();
-    if apply {
-        state.scale_dirty = false;
-        match scale_edit(doc, page, state, units) {
-            Ok(edit) => app.views[index].pending_edit = Some(edit),
-            Err(e) => state.error = Some(e),
+    let edit = match carried {
+        Some(edit) => Some(edit),
+        None if apply => {
+            state.scale_dirty = false;
+            Some(scale_edit(doc, page, state, units))
         }
+        None => None,
+    };
+    match edit {
+        Some(Ok(edit)) => app.views[index].pending_edit = Some(edit),
+        Some(Err(e)) => state.error = Some(e),
+        None => {}
     }
     if let Some((page, annotation, reading, scale)) = select {
         app.views[index].current = page;
@@ -483,6 +503,10 @@ fn scale_edit(doc: &Document, page: usize, state: &MeasureView, units: crate::un
 /// user already chose (Perimeter, Area) stays.
 pub(crate) fn default_tool(app: &mut PdfCraftApp) {
     if !matches!(app.quick_tool, QuickTool::Measure(_)) {
+        // A paragraph still open in the text editor is applied, as leaving Edit does.
+        if matches!(app.quick_tool, QuickTool::EditText | QuickTool::AddText) {
+            app.put_down_edit_text();
+        }
         app.quick_tool = QuickTool::Measure(Tool::Distance);
     }
 }

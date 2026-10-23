@@ -1926,3 +1926,57 @@ fn a_scale_field_is_stored_in_the_page_when_released_without_pressing_apply() {
     let stored = h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap().unit;
     assert_eq!(stored, "ft");
 }
+
+/// The panel's unit field, found by its value (other widgets may show the same text).
+fn measure_text_field<'a>(h: &'a Harness<'static, PdfCraftApp>, value: &'a str) -> egui_kittest::Node<'a> {
+    h.get_all_by_value(value).find(|n| format!("{:?}", n.accesskit_node().role()).contains("TextInput")).expect("text field")
+}
+
+#[test]
+fn a_scale_edit_still_open_when_the_page_changes_is_stored_on_its_own_page() {
+    let (mut h, c) = harness_pages(2);
+    let doc = h.state().views[0].id;
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.scale"}));
+    h.run_steps(3);
+    let unit = |h: &Harness<'static, PdfCraftApp>, page| h.state().session.get(doc).unwrap().measurement_scale(page, [20.0, 20.0]).unwrap().unit;
+    let before = unit(&h, 0);
+    let field = measure_text_field(&h, &before);
+    field.focus();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    field.type_text("ft");
+    h.run_steps(2);
+    assert_eq!(unit(&h, 0), before, "still being edited");
+    // The view moves to page 2 while the field is still being edited.
+    h.state_mut().views[0].go_to_page(1);
+    h.run_steps(4);
+    assert_eq!(unit(&h, 0), "ft", "the edit is stored on the page it was made on");
+    assert_eq!(unit(&h, 1), before, "the page now shown gets no viewport of its own");
+}
+
+#[test]
+fn a_scale_the_fields_cannot_show_is_replaced_only_by_apply() {
+    use pdfcraft_engine::{Edit, measure::Scale};
+    let (mut h, c) = harness_pages(1);
+    let doc = h.state().views[0].id;
+    // An imported scale with different X and Y factors: the panel's one ratio cannot hold it.
+    let uneven = Scale { y: 4.0, ..Scale::new(2.0, "m", 2).unwrap() };
+    h.state_mut().apply_edit(Edit::SetMeasurementScale { page: 0, bbox: [0.0, 0.0, 1000.0, 1000.0], name: "plan".into(), scale: uneven.clone() });
+    ok(&mut h, &c, "ui.command", json!({"id":"measure.scale"}));
+    h.run_steps(3);
+    let stored = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(doc).unwrap().measurement_scale(0, [20.0, 20.0]).unwrap();
+    assert_eq!(stored(&h), uneven);
+    // Renaming the viewport and leaving the field does not flatten the scale.
+    let field = measure_text_field(&h, "Drawing scale");
+    field.focus();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    field.type_text("Renamed");
+    h.run_steps(2);
+    h.get_by_label("Drawing scale").click();
+    h.run_steps(4);
+    assert_eq!(stored(&h), uneven, "only Apply may replace a scale the fields cannot show");
+    // Apply still replaces it when asked.
+    h.get_by_label("Apply scale").click();
+    h.run_steps(4);
+    let replaced = stored(&h);
+    assert_eq!(replaced.x, replaced.y);
+}
